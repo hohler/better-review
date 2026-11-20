@@ -37,8 +37,9 @@ a { color: var(--accent); cursor: pointer; text-decoration: none; }
 #side form { margin-top: 18px; }
 #side input { width: 100%; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
 
-#main { flex: 1; overflow-y: auto; padding: 14px 32px 120px; min-width: 0; background: var(--page); }
-.top { display: flex; gap: 6px; align-items: center; margin-bottom: 26px; }
+/* No top padding here: sticky headers stick to the padding edge, so content would show through above them. */
+#main { flex: 1; overflow-y: auto; padding: 0 32px 120px; min-width: 0; background: var(--page); }
+.top { display: flex; gap: 6px; align-items: center; margin-bottom: 26px; padding-top: 14px; }
 .top button { border-radius: 99px; background: var(--bg); }
 .top button.primary { background: var(--accent); }
 .top .tab.active { background: var(--line); border-color: var(--line); }
