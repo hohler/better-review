@@ -334,7 +334,7 @@ function fileEl(f, hidden, ctx, only) {
       h('span', { className: 'stats' }, stats(f)),
       // Marking a file whose top is already scrolled out of view collapses it, so jump to the next file.
       only && only.size < f.hunks.length && h('span', { className: 'tag', textContent: `${only.size} of ${f.hunks.length} hunks` }),
-      !ctx.tour && check(done, () => toggle([f.path], !done, !done && card.getBoundingClientRect().top < main.getBoundingClientRect().top && card.id)),
+      !ctx.tour && check(done, () => toggle([f.path], !done, !done && card.getBoundingClientRect().top < main.getBoundingClientRect().top + 56 && card.id)),
     ),
     body,
   );
@@ -438,6 +438,21 @@ function draw(repo, id, data, guide) {
     await reload(repo, id);
   };
   const act = (action) => async (e) => {
+    // Taking back an approval needs a second click within 4 seconds, so a stray click cannot do it.
+    if (action === 'unapprove' && !e.target.dataset.armed) {
+      const b = e.target;
+      const label = b.textContent;
+      b.dataset.armed = '1';
+      b.textContent = 'Click again to unapprove';
+      b.classList.add('warn');
+      setTimeout(() => {
+        if (!b.isConnected || b.disabled) return;
+        delete b.dataset.armed;
+        b.textContent = label;
+        b.classList.remove('warn');
+      }, 4000);
+      return;
+    }
     e.target.disabled = true;
     try {
       await invoke('review', { repo, id, action });
