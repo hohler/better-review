@@ -287,6 +287,22 @@ async fn comment(repo: String, id: u64, text: String, path: Option<String>, line
 }
 
 #[tauri::command]
+async fn comment_update(repo: String, id: u64, comment: u64, text: String) -> Result<String, String> {
+    slug(&repo, true)?;
+    if text.trim().is_empty() {
+        return Err("Empty comment".into());
+    }
+    bg(move || run("twg", &["bb", "prs", "comment", "update", &format!("--pull-request={id}"), &format!("--comment={comment}"), &format!("--repo={repo}"), &format!("--text={text}")], None)).await
+}
+
+// --yes skips twg's own prompt: the app asks for a second click before it gets here.
+#[tauri::command]
+async fn comment_delete(repo: String, id: u64, comment: u64) -> Result<String, String> {
+    slug(&repo, true)?;
+    bg(move || run("twg", &["bb", "prs", "comment", "delete", &format!("--pull-request={id}"), &format!("--comment={comment}"), &format!("--repo={repo}"), "--yes"], None)).await
+}
+
+#[tauri::command]
 async fn review(repo: String, id: u64, action: String) -> Result<String, String> {
     slug(&repo, true)?;
     if !["approve", "unapprove", "request-changes", "remove-request-changes"].contains(&action.as_str()) {
@@ -323,7 +339,7 @@ fn main() {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![inbox, pr, diff, file, guide, tour, installed, agent_test, comment, review, open_url])
+        .invoke_handler(tauri::generate_handler![inbox, pr, diff, file, guide, tour, installed, agent_test, comment, comment_update, comment_delete, review, open_url])
         .run(tauri::generate_context!())
         .expect("failed to start Better Review");
 }

@@ -65,7 +65,7 @@ let current = null;
 const prs = new Map(); // key -> Promise<{pr, files}>
 const guides = new Map(); // key -> Promise<guide>
 const guideDone = new Map(); // key -> guide
-let tab = 'guide';
+let tab = 'overview';
 const fileCache = new Map(); // repo@hash:path -> Promise<lines>
 const tours = new Map(); // key -> Promise<tour>
 const tourDone = new Map(); // key -> tour
@@ -183,17 +183,19 @@ function renderSide() {
           ['Approved', items.filter((i) => i.attention?.approved)],
         ].map(([label, list]) => [
           list.length > 0 && h('h3', { textContent: `${label} (${list.length})` }),
-          list
-            .sort((a, b) => b.updatedOn.localeCompare(a.updatedOn))
-            .map((i) =>
+          // Repos in the order of their most recently updated PR.
+          Object.entries(Object.groupBy(list.sort((a, b) => b.updatedOn.localeCompare(a.updatedOn)), (i) => i.repo)).map(([repo, prsOfRepo]) => [
+            h('h4', { textContent: repo.split('/')[1] }),
+            prsOfRepo.map((i) =>
               h(
                 'a',
                 { className: 'pr' + (current === key(i.repo, i.id) ? ' active' : ''), onclick: () => select(i.repo, i.id) },
                 h('span', { textContent: `${i.attention?.approved ? '✓ ' : ''}${i.title}` }),
                 i.attention?.participantState === 'changes_requested' && h('small', { className: 'warn', textContent: '● Changes requested' }),
-                h('small', { textContent: `${i.repo.split('/')[1]} #${i.id} · ${i.author?.displayName ?? '?'} · ${ago(i.updatedOn)}` }),
+                h('small', { textContent: `#${i.id} · ${i.author?.displayName ?? '?'} · ${ago(i.updatedOn)}` }),
               ),
             ),
+          ]),
         ]),
         !items.length && !errors[ws] && h('p', { className: 'muted', textContent: inboxes[ws] ? 'No open reviews' : 'Loading…' }),
       );
@@ -220,24 +222,16 @@ async function select(repo, id, keepScroll) {
   const k = (current = key(repo, id));
   const y = main.scrollTop;
   renderSide();
-  if (!keepScroll) set(main, spinner('Loading the pull request'));
+  if (!keepScroll) {
+    // A newly opened PR starts on Overview, which needs no AI. Guide and Tour are written when their tab is opened.
+    tab = 'overview';
+    set(main, spinner('Loading the pull request'));
+  }
   try {
     const data = await loadPr(repo, id);
     if (current !== k) return;
-    draw(repo, id, data, guideDone.get(k));
+    draw(repo, id, data);
     if (keepScroll) main.scrollTop = y;
-    if (guideDone.has(k)) return;
-    const box = main.querySelector('.guide');
-    const show = () => current === k && draw(repo, id, data, guideDone.get(k));
-    loadGuide(repo, id).then(
-      () => {
-        if (current !== k || !box.isConnected) return;
-        // Do not reorder the page while the user is already reading or writing.
-        if (main.scrollTop < 300 && !main.querySelector('form.comment')) show();
-        else set(box, h('button', { className: 'primary', textContent: 'Review guide is ready, show it', onclick: show }));
-      },
-      (e) => box.isConnected && set(box, h('p', { className: 'error', textContent: `Guide failed: ${e}` })),
-    );
   } catch (e) {
     if (current === k) set(main, h('p', { className: 'error', textContent: String(e) }));
   }
@@ -249,11 +243,42 @@ function reload(repo, id) {
   return select(repo, id, true);
 }
 
-function commentForm(send, onCancel) {
-  const area = h('textarea', { placeholder: 'Comment (Cmd+Enter to send)' });
+// A plain-text Markdown editor with the two things reviews need: code insertion and a preview of how it will render.
+// opts: value (prefill when editing), label (submit button), lang (language for new code blocks, e.g. the file's extension).
+function commentForm(send, onCancel, { value = '', label = 'Comment', lang = '' } = {}) {
+  const area = h('textarea', { placeholder: 'Comment (Cmd+Enter to send)', value });
+  const preview = h('div', { className: 'preview', hidden: true });
   const err = h('p', { className: 'error' });
-  const btn = h('button', { className: 'primary', textContent: 'Comment' });
-  const form = h('form', { className: 'comment' }, area, h('div', {}, btn, onCancel && h('button', { type: 'button', textContent: 'Cancel', onclick: onCancel })), err);
+  const btn = h('button', { className: 'primary', textContent: label });
+  // Wraps the selection, or a placeholder, and leaves it selected so typing replaces it.
+  const wrap = (before, after, placeholder) => {
+    const s = area.selectionStart;
+    const text = area.value.slice(s, area.selectionEnd) || placeholder;
+    area.setRangeText(before + text + after, s, area.selectionEnd, 'end');
+    area.setSelectionRange(s + before.length, s + before.length + text.length);
+    area.focus();
+  };
+  const block = () => wrap(`${area.selectionStart > 0 && area.value[area.selectionStart - 1] !== '\n' ? '\n' : ''}\`\`\`${lang}\n`, '\n```\n', 'code');
+  const toggle = h('button', {
+    type: 'button',
+    textContent: 'Preview',
+    onclick: () => {
+      preview.hidden = !preview.hidden;
+      area.hidden = !preview.hidden;
+      toggle.textContent = preview.hidden ? 'Preview' : 'Write';
+      if (!preview.hidden) set(preview, area.value.trim() ? rich(area.value) : h('p', { className: 'muted', textContent: 'Nothing to preview.' }));
+      else area.focus();
+    },
+  });
+  const tools = h(
+    'div',
+    { className: 'tools' },
+    h('button', { type: 'button', textContent: '{ } Code block', title: 'Insert a code block, or wrap the selection in one', onclick: block }),
+    h('button', { type: 'button', textContent: '`code`', title: 'Inline code', onclick: () => wrap('`', '`', 'code') }),
+    h('span', { className: 'grow' }),
+    toggle,
+  );
+  const form = h('form', { className: 'comment' }, tools, area, preview, h('div', {}, btn, onCancel && h('button', { type: 'button', textContent: 'Cancel', onclick: onCancel })), err);
   form.onsubmit = async (e) => {
     e.preventDefault();
     if (!area.value.trim()) return;
@@ -267,27 +292,54 @@ function commentForm(send, onCancel) {
   };
   area.onkeydown = (e) => {
     if (e.metaKey && e.key === 'Enter') form.requestSubmit();
+    // Inside a code block Tab indents. Elsewhere it keeps moving focus, so the form stays keyboard friendly.
+    if (e.key === 'Tab' && !e.shiftKey && (area.value.slice(0, area.selectionStart).match(/```/g)?.length ?? 0) % 2 === 1) {
+      e.preventDefault();
+      area.setRangeText('  ', area.selectionStart, area.selectionEnd, 'end');
+    }
   };
   setTimeout(() => onCancel && area.focus());
   return form;
 }
 
-function threadEl(root, comments, post) {
+function threadEl(root, comments, post, lang) {
   const ids = new Set([root.id]);
   const all = [root];
   for (const c of comments) if (c.parent && ids.has(c.parent.id)) ids.add(c.id), all.push(c); // comments arrive in chronological order
   const slot = h('div');
   const reply = h('button', {
     textContent: 'Reply',
-    onclick: () => set(slot, commentForm((text) => post({ text, replyTo: root.id }), () => set(slot, reply))),
+    onclick: () => set(slot, commentForm((text) => post({ text, replyTo: root.id }), () => set(slot, reply), { lang })),
   });
   slot.append(reply);
-  return h(
-    'div',
-    { className: 'thread' + (root.resolution ? ' resolved' : '') },
-    all.map((c) => h('div', { className: 'comment' }, h('b', { textContent: c.user?.display_name ?? '?' }), h('small', { textContent: ` ${ago(c.created_on)}${c === root && root.resolution ? ' · resolved' : ''}` }), rich(c.content?.raw))),
-    slot,
-  );
+  const item = (c) => {
+    const text = c.content?.raw ?? '';
+    const body = h('div', {}, rich(text));
+    const edit = h('a', { textContent: 'Edit', onclick: () => set(body, commentForm((t) => post({ edit: c.id, text: t }), () => set(body, rich(text)), { value: text, label: 'Save', lang })) });
+    // Deleting cannot be undone on Bitbucket, so it takes a second click within 4 seconds.
+    const del = h('a', { textContent: 'Delete' });
+    del.onclick = () => {
+      if (!del.dataset.armed) {
+        del.dataset.armed = '1';
+        del.textContent = 'Click again to delete';
+        del.classList.add('minus');
+        setTimeout(() => {
+          if (!del.isConnected || del.dataset.armed === 'go') return;
+          delete del.dataset.armed;
+          del.textContent = 'Delete';
+          del.classList.remove('minus');
+        }, 4000);
+        return;
+      }
+      if (del.dataset.armed === 'go') return;
+      del.dataset.armed = 'go';
+      del.textContent = 'Deleting…';
+      post({ remove: c.id }).catch((e) => (del.textContent = String(e)));
+    };
+    const mine = c.user?.uuid && c.user.uuid === myUuid();
+    return h('div', { className: 'comment' }, h('div', { className: 'chead' }, h('b', { textContent: c.user?.display_name ?? '?' }), h('small', { textContent: `${ago(c.created_on)}${c === root && root.resolution ? ' · resolved' : ''}` }), h('span', { className: 'grow' }), mine && [edit, del]), body);
+  };
+  return h('div', { className: 'thread' + (root.resolution ? ' resolved' : '') }, all.map(item), slot);
 }
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -387,7 +439,7 @@ function fileEl(f, hidden, ctx, only) {
         const anchor = l.t === '-' ? { fromLine: l.o } : { line: l.n };
         const start = () => {
           if (row.nextSibling?.dataset.form) return row.nextSibling.remove();
-          const tr = note(commentForm((text) => post({ text, path: f.path, ...anchor }), () => tr.remove()));
+          const tr = note(commentForm((text) => post({ text, path: f.path, ...anchor }), () => tr.remove(), { lang }));
           tr.dataset.form = '1';
           row.after(tr);
         };
@@ -395,12 +447,12 @@ function fileEl(f, hidden, ctx, only) {
         row.append(h('td', { className: 'no', textContent: l.n ?? '−', title: 'Comment on this line', onclick: start }), code);
         tbody.append(row);
         const here = roots.filter((c) => !placed.has(c) && (c.inline.to != null ? l.n === c.inline.to : l.t !== '+' && l.o === c.inline.from));
-        if (here.length) tbody.append(note(here.map((c) => (placed.add(c), threadEl(c, comments, post)))));
+        if (here.length) tbody.append(note(here.map((c) => (placed.add(c), threadEl(c, comments, post, lang)))));
       }
     }
     if (f.hunks.length && f.status !== 'added' && f.status !== 'deleted') tbody.append(expander(end + 1, null, only ? '↕ Show the rest of the file' : '↕ Show unchanged lines below'));
     const outdated = roots.filter((c) => !placed.has(c));
-    if (outdated.length && !only) tbody.prepend(note(h('small', { textContent: 'Comments outside the current diff' }), outdated.map((c) => threadEl(c, comments, post))));
+    if (outdated.length && !only) tbody.prepend(note(h('small', { textContent: 'Comments outside the current diff' }), outdated.map((c) => threadEl(c, comments, post, lang))));
     set(body, h('div', { className: 'scroll' }, h('table', { className: 'diff' }, tbody)));
   };
   card.show = show;
@@ -412,6 +464,7 @@ function fileEl(f, hidden, ctx, only) {
 
 function draw(repo, id, data, guide) {
   const { pr, files } = data;
+  guide ??= guideDone.get(key(repo, id)); // may have arrived since the caller looked (background preparation)
   tourNav = null;
   const aiKey = `${repo}-${id}-${pr.source.commit.hash}`; // same key the backend gets, so progress events match
   const core = files.filter((f) => !GENERATED.test(f.path));
@@ -439,8 +492,11 @@ function draw(repo, id, data, guide) {
     const i = cards.findIndex((c) => c.id === nextAfter);
     (cards[i + 1] ?? cards[i]).scrollIntoView({ block: 'start' });
   };
+  // One write path for comments: new or reply ({ text, ... }), edit ({ edit: commentId, text }), delete ({ remove: commentId }).
   const post = async (args) => {
-    await invoke('comment', { repo, id, ...args });
+    if (args.remove) await invoke('comment_delete', { repo, id, comment: args.remove });
+    else if (args.edit) await invoke('comment_update', { repo, id, comment: args.edit, text: args.text });
+    else await invoke('comment', { repo, id, ...args });
     await reload(repo, id);
   };
   const act = (action) => async (e) => {
@@ -592,7 +648,18 @@ function draw(repo, id, data, guide) {
       pr.description && h('div', { className: 'box' }, h('h3', { textContent: 'Description' }), rich(pr.description)),
       h('div', { className: 'box' }, h('h3', { textContent: `Discussion (${general.length})` }), general.map((c) => threadEl(c, comments, post)), commentForm((text) => post({ text }))),
     ],
-    guide: () => steps.map(step),
+    // The guide is requested here, on first open of the tab, so opening a PR alone never spends an AI request.
+    guide: () => {
+      if (guide) return steps.map(step);
+      const k = key(repo, id);
+      // Progress: share of source files the answer has already placed in a group.
+      const box = h('div', { className: 'guide' }, spinner('Preparing the review guide', `guide:${aiKey}`, (text) => core.filter((f) => text.includes(JSON.stringify(f.path))).length / (core.length || 1)));
+      loadGuide(repo, id).then(
+        () => current === k && tab === 'guide' && box.isConnected && draw(repo, id, data),
+        (e) => box.isConnected && set(box, h('p', { className: 'error', textContent: `Guide failed: ${e}` }), h('button', { textContent: 'Try again', onclick: () => draw(repo, id, data) })),
+      );
+      return box;
+    },
     tour: tourView,
     diff: () => h('div', { className: 'cards' }, files.map((f) => card(f.path))),
   };
@@ -610,8 +677,6 @@ function draw(repo, id, data, guide) {
     ),
     h('h1', {}, title),
     h('p', { className: 'meta' }, h('span', { textContent: `${pr.author?.display_name ?? '?'} · ` }), h('code', { textContent: `${pr.destination.branch.name} ← ${pr.source.branch.name}` }), h('span', { textContent: ` · ${repo} #${id} · ${files.length} files · ${reviewed.size} reviewed · updated ${ago(pr.updated_on)}` })),
-    // Guide progress: share of source files the answer has already placed in a group.
-    !guide && h('div', { className: 'guide' }, spinner('Preparing the review guide', `guide:${aiKey}`, (text) => core.filter((f) => text.includes(JSON.stringify(f.path))).length / (core.length || 1))),
     views[tab](),
   );
   main.scrollTop = 0;
