@@ -6,11 +6,11 @@ Guided pull request reviews for Bitbucket, as a macOS app (Tauri).
 
 - `twg` CLI, logged in to the Bitbucket workspaces you review in
 - One AI agent CLI, logged in. Guide and tour are generated on your own account:
-  - `claude` (Claude Code): Sonnet for the guide, Opus for the tour, or
-  - `copilot` (GitHub Copilot CLI): Copilot picks the model your plan allows. Each guide or tour is one premium request.
+  - `claude` (Claude Code): by default Sonnet for the guide, Opus for the tour, or
+  - `copilot` (GitHub Copilot CLI): by default Copilot picks the model your plan allows. Each guide or tour is one premium request.
 - To build: Node, Rust (`brew install rustup && rustup default stable`), Xcode command line tools
 
-On first start a short wizard asks which agent to use and for your Bitbucket workspace. You can change the agent later under Better Review > Settings (Cmd+,).
+On first start a short wizard asks which agent to use and for your Bitbucket workspace. You can change the agent, and the model for guide and tour, later under Better Review > Settings (Cmd+,).
 
 ## Build
 

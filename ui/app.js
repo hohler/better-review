@@ -58,6 +58,13 @@ let inboxes = load('inboxes', {});
 // No preset workspace: the setup wizard asks for it. Installs from before the wizard keep the ones they had loaded.
 let workspaces = load('workspaces', Object.keys(inboxes));
 let agent = load('agent', null); // 'claude' | 'copilot', null until the wizard ran
+// Claude's aliases follow the newest model of each tier, the CLI has no list. Copilot's list is asked from its CLI in Settings.
+const AGENTS = [
+  { id: 'claude', name: 'Claude Code', note: 'By default Sonnet writes the guide and Opus the tour.', install: 'Install the claude CLI and log in.', models: ['fable', 'opus', 'sonnet', 'haiku'].map((id) => ({ id, name: id[0].toUpperCase() + id.slice(1) })), guide: 'sonnet', tour: 'opus' },
+  { id: 'copilot', name: 'GitHub Copilot', note: 'On Auto, Copilot picks the model your plan allows. Each guide or tour is one premium request.', install: 'Install the copilot CLI and run "copilot login".', models: [{ id: 'auto', name: 'Auto (Copilot picks)' }], guide: 'auto', tour: 'auto' },
+];
+let models = load('models', {}); // agent -> { guide, tour }, missing means the agent's default
+const modelFor = (kind, a = agent, chosen = models) => chosen[a]?.[kind] ?? AGENTS.find((x) => x.id === a)?.[kind];
 // Preloading costs one AI request per open PR, so it is opt-in.
 const preloadOn = () => load('preload', false);
 const errors = {};
@@ -109,7 +116,7 @@ function loadGuide(repo, id) {
   const k = key(repo, id);
   if (!guides.has(k)) {
     const p = loadPr(repo, id).then(async ({ pr, files }) => {
-      const raw = await invoke('guide', { key: `${repo}-${id}-${pr.source.commit.hash}`, input: guideInput(pr, files), agent });
+      const raw = await invoke('guide', { key: `${repo}-${id}-${pr.source.commit.hash}`, input: guideInput(pr, files), agent, model: modelFor('guide') });
       const answer = JSON.parse(raw);
       const guide = normalizeGuide(answer, files);
       guide.meta = answer._meta;
@@ -127,7 +134,7 @@ function loadTour(repo, id) {
   const k = key(repo, id);
   if (!tours.has(k)) {
     const p = loadPr(repo, id).then(async ({ pr, files }) => {
-      const raw = await invoke('tour', { key: `${repo}-${id}-${pr.source.commit.hash}`, input: tourInput(pr, files), agent });
+      const raw = await invoke('tour', { key: `${repo}-${id}-${pr.source.commit.hash}`, input: tourInput(pr, files), agent, model: modelFor('tour') });
       const answer = JSON.parse(raw);
       const tour = normalizeTour(answer, files);
       tour.meta = answer._meta;
@@ -804,17 +811,21 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'g' && find.bar && !find.bar.hidden) e.preventDefault(), findRun(find.bar.querySelector('input').value, e.shiftKey ? -1 : 1);
 });
 
-const AGENTS = [
-  { id: 'claude', name: 'Claude Code', note: 'Sonnet writes the guide, Opus the tour.', install: 'Install the claude CLI and log in.' },
-  { id: 'copilot', name: 'GitHub Copilot', note: 'Copilot picks the model your plan allows. Each guide or tour is one premium request.', install: 'Install the copilot CLI and run "copilot login".' },
-];
-
 // One dialog for both cases: the setup wizard on first start (cannot be dismissed) and Settings later.
 async function openSettings(first) {
   if (document.querySelector('dialog.settings')) return;
   const found = await invoke('installed').catch(() => ({}));
   let pick = agent ?? (found.copilot && !found.claude ? 'copilot' : 'claude');
   let pre = preloadOn();
+  const chosen = structuredClone(models);
+  const offered = Object.fromEntries(AGENTS.map((x) => [x.id, x.models]));
+  const modelNote = h('small');
+  // A saved model stays selectable even if the list no longer offers it.
+  const modelSelect = (kind) => {
+    const value = modelFor(kind, pick, chosen);
+    const list = offered[pick].some((m) => m.id === value) ? offered[pick] : [...offered[pick], { id: value, name: value }];
+    return h('select', { onchange: (e) => (chosen[pick] = { ...chosen[pick], [kind]: e.target.value }) }, list.map((m) => h('option', { value: m.id, textContent: m.name, selected: m.id === value })));
+  };
   const status = h('small');
   const wsInput = h('input', { placeholder: 'e.g. my-company', value: workspaces[0] ?? '' });
   const problem = h('p', { className: 'error' });
@@ -823,7 +834,7 @@ async function openSettings(first) {
     status.className = '';
     status.textContent = 'Testing, this sends one short request…';
     try {
-      const reply = await invoke('agent_test', { agent: pick });
+      const reply = await invoke('agent_test', { agent: pick, model: modelFor('guide', pick, chosen) });
       status.className = 'plus';
       status.textContent = `Works. It replied: ${reply.slice(0, 60)}`;
     } catch (e) {
@@ -835,9 +846,12 @@ async function openSettings(first) {
     const ws = wsInput.value.trim();
     if (first && !/^[\w.-]+$/.test(ws)) return (problem.textContent = 'Enter your Bitbucket workspace, the first part of the URL after bitbucket.org/.');
     if (first && !workspaces.includes(ws)) workspaces = [ws, ...workspaces];
-    if (pick !== agent) for (const m of [guides, guideDone, tours, tourDone, streamed]) m.clear(); // results belong to the agent that wrote them
+    // Results belong to the agent and model that wrote them.
+    if (pick !== agent || ['guide', 'tour'].some((kind) => modelFor(kind, pick, chosen) !== modelFor(kind, pick))) for (const m of [guides, guideDone, tours, tourDone, streamed]) m.clear();
     agent = pick;
+    models = chosen;
     save('agent', agent);
+    save('models', models);
     save('preload', pre);
     save('workspaces', workspaces);
     dlg.close();
@@ -870,6 +884,8 @@ async function openSettings(first) {
           h('div', {}, h('b', { textContent: x.name }), h('small', { textContent: x.note }), h('small', { className: found[x.id] ? 'plus' : 'minus', textContent: found[x.id] ? 'Installed' : `Not found. ${x.install}` })),
         ),
       ),
+      h('div', { className: 'models' }, h('label', {}, 'Guide model', modelSelect('guide')), h('label', {}, 'Tour model', modelSelect('tour'))),
+      modelNote,
       h('div', { className: 'row' }, h('button', { type: 'button', textContent: 'Test this agent', onclick: test }), status),
       h('label', { className: 'check' }, h('input', { type: 'checkbox', checked: pre, onchange: (e) => (pre = e.target.checked) }), 'Prepare guides for all pull requests in the background'),
       h('small', { textContent: 'One AI request per open pull request. If off, a guide is written when you open the pull request.' }),
@@ -879,6 +895,15 @@ async function openSettings(first) {
     );
   dlg.addEventListener('cancel', (e) => (first ? e.preventDefault() : dlg.remove()));
   render();
+  if (found.copilot) {
+    invoke('models')
+      .then((list) => {
+        offered.copilot = [...AGENTS.find((x) => x.id === 'copilot').models, ...list];
+        if (!list.length) modelNote.textContent = 'Copilot: your plan offers no models to pick from, only Auto.';
+      })
+      .catch((e) => (modelNote.textContent = `Could not read Copilot's models: ${String(e).slice(0, 200)}`))
+      .then(render);
+  }
   document.body.append(dlg);
   dlg.showModal();
 }
