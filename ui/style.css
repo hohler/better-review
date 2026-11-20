@@ -87,7 +87,7 @@ h1 { font-size: 23px; font-weight: 600; margin: 0 0 6px; letter-spacing: -.01em;
 .scroll { overflow-x: auto; padding-bottom: 6px; }
 table.diff { border-collapse: collapse; min-width: 100%; font-family: var(--mono); font-size: 12px; line-height: 20px; }
 table.diff td { padding: 0; vertical-align: top; }
-td.no { width: 46px; min-width: 46px; padding-right: 14px !important; text-align: right; color: var(--muted); user-select: none; cursor: pointer; border-left: 2px solid transparent; }
+td.no { width: 46px; min-width: 46px; padding-right: 14px !important; text-align: right; color: var(--muted); user-select: none; cursor: pointer; border-left: 1px solid transparent; }
 td.no:hover { color: var(--accent); }
 td.code { white-space: pre; tab-size: 2; padding-left: 12px !important; padding-right: 16px !important; width: 100%; }
 tr.add { background: var(--add); }
