@@ -1,0 +1,55 @@
+{
+ "summary": "Adds gift card redemption to the checkout. A new `giftcards` module holds the card model, the redemption rule and the server lookup. The checkout hook subtracts the applied amount from the total, and the order summary gets an input to enter a code and a line showing the deduction.",
+ "groups": [
+  {
+   "title": "Gift card model and redemption rule",
+   "summary": "The core of the change. `applyGiftCard` caps the deduction at the order total and reports what stays on the card. Check how expired and missing cards are handled.",
+   "files": [
+    "src/giftcards/gift-card.ts"
+   ]
+  },
+  {
+   "title": "Server lookup",
+   "summary": "Normalizes the typed code, fetches the card from the new `/api/gift-cards` route and turns the three rejection cases into a typed error. Watch the order of the expiry and balance checks.",
+   "files": [
+    "src/giftcards/gift-card.service.ts",
+    "src/api/routes.ts"
+   ]
+  },
+  {
+   "title": "Checkout total",
+   "summary": "The checkout hook keeps the selected card in state and applies it to subtotal plus shipping. The new values are returned to the summary.",
+   "files": [
+    "src/checkout/use-checkout.ts"
+   ]
+  },
+  {
+   "title": "Order summary UI",
+   "summary": "A new input component for the code, and a deduction line with a remove button in the summary. The input is hidden once a card is applied.",
+   "files": [
+    "src/checkout/GiftCardInput.tsx",
+    "src/checkout/checkout-summary.tsx"
+   ]
+  },
+  {
+   "title": "Texts and tests",
+   "summary": "English strings for the input and the error cases, and unit tests for the redemption rule.",
+   "files": [
+    "src/i18n/en.json",
+    "src/giftcards/gift-card.spec.ts"
+   ]
+  }
+ ],
+ "generated": [
+  "pnpm-lock.yaml"
+ ],
+ "_meta": {
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "input": 4180,
+  "output": 612,
+  "seconds": 11.4,
+  "cost": 0.04,
+  "at": "@ms-2h"
+ }
+}

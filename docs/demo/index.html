@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Better Review demo</title>
+<link rel="stylesheet" href="../../ui/style.css">
+</head>
+<body>
+<nav id="side"></nav><div id="grip"></div><main id="main"></main>
+<script>
+// The real interface on invented data, for screenshots. Nothing here talks to Bitbucket or an AI agent.
+// Serve the repository root and open /docs/demo/#shot=guide&theme=dark (shots: overview, guide, tour, diff, settings).
+const q = new URLSearchParams(location.hash.slice(1));
+if (q.get('theme')) document.documentElement.style.colorScheme = q.get('theme');
+localStorage.clear();
+localStorage.setItem('agent', '"claude"');
+localStorage.setItem('workspaces', '["acme"]');
+
+const fx = async (name) => {
+  const text = await (await fetch(`fx/${name}`)).text();
+  const date = (h) => new Date(Date.now() - h * 36e5);
+  return text.replace(/"@-(\d+)h"/g, (_, h) => JSON.stringify(date(h).toISOString())).replace(/"@ms-(\d+)h"/g, (_, h) => date(h).getTime());
+};
+window.__TAURI__ = {
+  event: { listen: () => {} },
+  core: {
+    invoke: async (cmd, a) => {
+      if (cmd === 'installed') return { claude: true, copilot: true, twg: true };
+      if (cmd === 'models') return [{ id: 'gpt-6-luna', name: 'GPT-6 Luna' }, { id: 'mai-code-2-flash', name: 'MAI Code 2 Flash' }];
+      if (cmd === 'inbox') return fx('inbox.json');
+      if (cmd === 'pr' && a.id !== 482) {
+        const i = JSON.parse(await fx('inbox.json')).items.find((x) => x.id === a.id);
+        return JSON.stringify({ id: i.id, title: i.title, description: '', author: { display_name: i.author.displayName }, updated_on: i.updatedOn, source: { branch: { name: 'feature' }, commit: { hash: 'demo' }, repository: { full_name: i.repo } }, destination: { branch: { name: 'main' } }, participants: [{ user: { uuid: '{me}' }, approved: i.attention.approved, state: i.attention.participantState }], links: { html: { href: i.link } }, _comments: [] });
+      }
+      if (cmd === 'pr') return fx('pr-482.json');
+      if (cmd === 'diff') return a.id === 482 ? fx('diff-482.txt') : '';
+      if (cmd === 'guide' || cmd === 'tour') return fx(`${cmd}-482.json`);
+      if (cmd === 'file') return '';
+      return 'ok';
+    },
+  },
+};
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const find = async (selector, text) => {
+  for (let i = 0; i < 100; i++) {
+    const el = [...document.querySelectorAll(selector)].find((e) => !text || e.textContent.includes(text));
+    if (el) return el;
+    await sleep(50);
+  }
+  throw new Error(`demo: nothing matches ${selector} ${text ?? ''}`);
+};
+addEventListener('load', async () => {
+  const shot = q.get('shot');
+  if (!shot) return;
+  if (shot === 'settings') return (await find('#side button[title^="Settings"]')).click();
+  (await find('#side a.pr', '#482')).click();
+  if (shot === 'overview') return;
+  (await find('#main .top button', shot[0].toUpperCase() + shot.slice(1))).click();
+  if (shot === 'tour') {
+    await find('.tournav');
+    for (let i = 0; i < +(q.get('stop') ?? 1); i++) document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' })), await sleep(100);
+  }
+  if (shot === 'diff') {
+    await sleep(300);
+    (await find('#main .file', q.get('file') ?? 'gift-card.ts')).scrollIntoView({ block: 'start' });
+    document.querySelector('#main').scrollBy(0, -70);
+  }
+});
+</script>
+<script src="../../ui/vendor/highlight.min.js"></script>
+<script type="module" src="../../ui/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,127 @@
+{
+ "id": 482,
+ "title": "SHOP-1284: Redeem gift cards at checkout",
+ "state": "OPEN",
+ "description": "Customers can enter a gift card code in the order summary. The card is checked on the server and its balance is taken off the total, shipping included.\n\nNot in this PR: paying the rest with a second gift card.",
+ "author": {
+  "display_name": "Priya Nair",
+  "uuid": "{priya}"
+ },
+ "updated_on": "@-2h",
+ "source": {
+  "branch": {
+   "name": "feature/SHOP-1284-gift-cards"
+  },
+  "commit": {
+   "hash": "7c41e9ab2d30"
+  },
+  "repository": {
+   "full_name": "acme/storefront"
+  }
+ },
+ "destination": {
+  "branch": {
+   "name": "main"
+  }
+ },
+ "participants": [
+  {
+   "user": {
+    "display_name": "Alex Morgan",
+    "uuid": "{me}"
+   },
+   "role": "REVIEWER",
+   "approved": false,
+   "state": null
+  },
+  {
+   "user": {
+    "display_name": "Jonas Weber",
+    "uuid": "{jonas}"
+   },
+   "role": "REVIEWER",
+   "approved": true,
+   "state": "approved"
+  }
+ ],
+ "links": {
+  "html": {
+   "href": "https://bitbucket.org/acme/storefront/pull-requests/482"
+  }
+ },
+ "_comments": [
+  {
+   "id": 1,
+   "created_on": "@-4h",
+   "updated_on": "@-4h",
+   "content": {
+    "raw": "Nice and small. The rule living in one pure function makes this easy to review."
+   },
+   "user": {
+    "display_name": "Jonas Weber",
+    "uuid": "{jonas}"
+   },
+   "deleted": false,
+   "pending": false,
+   "resolution": null
+  },
+  {
+   "id": 2,
+   "created_on": "@-3h",
+   "updated_on": "@-3h",
+   "content": {
+    "raw": "An expired card still reports its full balance as `remaining`. Is that what the summary should show?"
+   },
+   "user": {
+    "display_name": "Alex Morgan",
+    "uuid": "{me}"
+   },
+   "deleted": false,
+   "pending": false,
+   "resolution": null,
+   "inline": {
+    "from": null,
+    "to": 20,
+    "path": "src/giftcards/gift-card.ts"
+   }
+  },
+  {
+   "id": 3,
+   "created_on": "@-2h",
+   "updated_on": "@-2h",
+   "content": {
+    "raw": "Good catch. `lookupGiftCard` already rejects expired cards, so the summary never gets one. I can make that explicit:\n\n```ts\nif (!card) return { applied: 0, remaining: 0 };\nif (isExpired(card)) throw new GiftCardError('expired');\n```"
+   },
+   "user": {
+    "display_name": "Priya Nair",
+    "uuid": "{priya}"
+   },
+   "deleted": false,
+   "pending": false,
+   "resolution": null,
+   "parent": {
+    "id": 2
+   }
+  },
+  {
+   "id": 4,
+   "created_on": "@-1h",
+   "updated_on": "@-1h",
+   "content": {
+    "raw": "Should this be rounded? `shippingCost` can return fractions of a cent for express."
+   },
+   "user": {
+    "display_name": "Alex Morgan",
+    "uuid": "{me}"
+   },
+   "deleted": false,
+   "pending": true,
+   "resolution": null,
+   "inline": {
+    "from": null,
+    "to": 17,
+    "path": "src/checkout/use-checkout.ts"
+   }
+  }
+ ]
+}

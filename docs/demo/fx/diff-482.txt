@@ -1,0 +1,242 @@
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index c029fe7..0126b99 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -10,6 +10,9 @@ importers:
+         specifier: ^19.2.0
+         version: 19.2.0
+     devDependencies:
++      '@testing-library/react':
++        specifier: ^17.1.0
++        version: 17.1.0
+       vitest:
+         specifier: ^4.0.3
+         version: 4.0.3
+diff --git a/src/api/routes.ts b/src/api/routes.ts
+index 5df5ec7..cc241f0 100644
+--- a/src/api/routes.ts
++++ b/src/api/routes.ts
+@@ -1,5 +1,6 @@
+ export const routes = {
+   cart: '/api/cart',
+   checkout: '/api/checkout',
++  giftCards: '/api/gift-cards',
+   orders: '/api/orders',
+ } as const;
+diff --git a/src/checkout/GiftCardInput.tsx b/src/checkout/GiftCardInput.tsx
+new file mode 100644
+index 0000000..5daacec
+--- /dev/null
++++ b/src/checkout/GiftCardInput.tsx
+@@ -0,0 +1,39 @@
++import { useState } from 'react';
++import type { GiftCard } from '../giftcards/gift-card';
++import { GiftCardError, lookupGiftCard } from '../giftcards/gift-card.service';
++import { useTranslation } from '../i18n/use-translation';
++
++interface Props {
++  onApply: (card: GiftCard) => void;
++}
++
++export function GiftCardInput({ onApply }: Props) {
++  const { t } = useTranslation();
++  const [code, setCode] = useState('');
++  const [error, setError] = useState<string | null>(null);
++  const [busy, setBusy] = useState(false);
++
++  async function submit() {
++    setBusy(true);
++    setError(null);
++    try {
++      onApply(await lookupGiftCard(code));
++      setCode('');
++    } catch (e) {
++      setError(e instanceof GiftCardError ? t(`giftCard.error.${e.reason}`) : t('giftCard.error.generic'));
++    } finally {
++      setBusy(false);
++    }
++  }
++
++  return (
++    <div className="gift-card">
++      <label htmlFor="gift-card-code">{t('giftCard.label')}</label>
++      <input id="gift-card-code" value={code} onChange={(e) => setCode(e.target.value)} placeholder="XXXX-XXXX-XXXX" />
++      <button type="button" disabled={busy || !code} onClick={submit}>
++        {t('giftCard.apply')}
++      </button>
++      {error && <p role="alert">{error}</p>}
++    </div>
++  );
++}
+diff --git a/src/checkout/checkout-summary.tsx b/src/checkout/checkout-summary.tsx
+index 83d9c4a..157c034 100644
+--- a/src/checkout/checkout-summary.tsx
++++ b/src/checkout/checkout-summary.tsx
+@@ -1,10 +1,11 @@
+ import { formatPrice } from '../i18n/format';
+ import { useTranslation } from '../i18n/use-translation';
++import { GiftCardInput } from './GiftCardInput';
+ import { useCheckout } from './use-checkout';
+ 
+ export function CheckoutSummary() {
+   const { t } = useTranslation();
+-  const { subtotal, shipping, total } = useCheckout();
++  const { subtotal, shipping, total, giftCard, giftCardAmount, setGiftCard } = useCheckout();
+ 
+   return (
+     <section className="summary">
+@@ -14,9 +15,21 @@ export function CheckoutSummary() {
+         <dd>{formatPrice(subtotal)}</dd>
+         <dt>{t('checkout.shipping')}</dt>
+         <dd>{formatPrice(shipping)}</dd>
++        {giftCard && (
++          <>
++            <dt>
++              {t('giftCard.line', { code: giftCard.code.slice(-4) })}
++              <button type="button" className="link" onClick={() => setGiftCard(null)}>
++                {t('giftCard.remove')}
++              </button>
++            </dt>
++            <dd>-{formatPrice(giftCardAmount)}</dd>
++          </>
++        )}
+         <dt className="total">{t('checkout.total')}</dt>
+         <dd className="total">{formatPrice(total)}</dd>
+       </dl>
++      {!giftCard && <GiftCardInput onApply={setGiftCard} />}
+       <button type="submit">{t('checkout.pay', { amount: formatPrice(total) })}</button>
+     </section>
+   );
+diff --git a/src/checkout/use-checkout.ts b/src/checkout/use-checkout.ts
+index 26ae8ec..0abe303 100644
+--- a/src/checkout/use-checkout.ts
++++ b/src/checkout/use-checkout.ts
+@@ -1,5 +1,6 @@
+ import { useMemo, useState } from 'react';
+ import { useCart } from '../cart/use-cart';
++import { applyGiftCard, type GiftCard } from '../giftcards/gift-card';
+ import { shippingCost } from './shipping';
+ 
+ export type ShippingMethod = 'standard' | 'express';
+@@ -7,10 +8,13 @@ export type ShippingMethod = 'standard' | 'express';
+ export function useCheckout() {
+   const { items } = useCart();
+   const [shippingMethod, setShippingMethod] = useState<ShippingMethod>('standard');
++  const [giftCard, setGiftCard] = useState<GiftCard | null>(null);
+ 
+   const subtotal = useMemo(() => items.reduce((sum, item) => sum + item.price * item.quantity, 0), [items]);
+   const shipping = shippingCost(shippingMethod, subtotal);
+-  const total = subtotal + shipping;
++  // The gift card also covers shipping, so it is applied to the full amount.
++  const { applied: giftCardAmount } = applyGiftCard(subtotal + shipping, giftCard);
++  const total = subtotal + shipping - giftCardAmount;
+ 
+-  return { items, subtotal, shipping, total, shippingMethod, setShippingMethod };
++  return { items, subtotal, shipping, giftCard, giftCardAmount, setGiftCard, total, shippingMethod, setShippingMethod };
+ }
+diff --git a/src/giftcards/gift-card.service.ts b/src/giftcards/gift-card.service.ts
+new file mode 100644
+index 0000000..5fc79a9
+--- /dev/null
++++ b/src/giftcards/gift-card.service.ts
+@@ -0,0 +1,22 @@
++import { http } from '../api/http';
++import { routes } from '../api/routes';
++import { isExpired, type GiftCard } from './gift-card';
++
++export type GiftCardRejection = 'not_found' | 'expired' | 'empty';
++
++export class GiftCardError extends Error {
++  constructor(public readonly reason: GiftCardRejection) {
++    super(`Gift card rejected: ${reason}`);
++  }
++}
++
++export async function lookupGiftCard(code: string): Promise<GiftCard> {
++  const normalized = code.replace(/[\s-]+/g, '').toUpperCase();
++  const response = await http.get(`${routes.giftCards}/${encodeURIComponent(normalized)}`);
++  if (response.status === 404) throw new GiftCardError('not_found');
++
++  const card: GiftCard = await response.json();
++  if (isExpired(card)) throw new GiftCardError('expired');
++  if (card.balance <= 0) throw new GiftCardError('empty');
++  return card;
++}
+diff --git a/src/giftcards/gift-card.spec.ts b/src/giftcards/gift-card.spec.ts
+new file mode 100644
+index 0000000..68f2cb3
+--- /dev/null
++++ b/src/giftcards/gift-card.spec.ts
+@@ -0,0 +1,24 @@
++import { describe, expect, it } from 'vitest';
++import { applyGiftCard, isExpired, type GiftCard } from './gift-card';
++
++const card = (over: Partial<GiftCard> = {}): GiftCard => ({ code: 'ABCD1234EFGH', balance: 5000, currency: 'EUR', expiresAt: null, ...over });
++
++describe('applyGiftCard', () => {
++  it('pays the whole order when the balance is large enough', () => {
++    expect(applyGiftCard(3200, card())).toEqual({ applied: 3200, remaining: 1800 });
++  });
++
++  it('never pays more than the balance', () => {
++    expect(applyGiftCard(8000, card())).toEqual({ applied: 5000, remaining: 0 });
++  });
++
++  it('ignores an expired card', () => {
++    expect(applyGiftCard(3200, card({ expiresAt: '2020-01-01' })).applied).toBe(0);
++  });
++});
++
++describe('isExpired', () => {
++  it('treats a card without expiry date as valid', () => {
++    expect(isExpired(card())).toBe(false);
++  });
++});
+diff --git a/src/giftcards/gift-card.ts b/src/giftcards/gift-card.ts
+new file mode 100644
+index 0000000..73f0099
+--- /dev/null
++++ b/src/giftcards/gift-card.ts
+@@ -0,0 +1,23 @@
++export interface GiftCard {
++  code: string;
++  /** Remaining balance in cents. */
++  balance: number;
++  currency: string;
++  expiresAt: string | null;
++}
++
++export interface GiftCardResult {
++  applied: number;
++  remaining: number;
++}
++
++export function isExpired(card: GiftCard, now = new Date()): boolean {
++  return card.expiresAt !== null && new Date(card.expiresAt) < now;
++}
++
++// A gift card never pays more than the order total, the rest stays on the card.
++export function applyGiftCard(total: number, card: GiftCard | null): GiftCardResult {
++  if (!card || isExpired(card)) return { applied: 0, remaining: card?.balance ?? 0 };
++  const applied = Math.min(total, card.balance);
++  return { applied, remaining: card.balance - applied };
++}
+diff --git a/src/i18n/en.json b/src/i18n/en.json
+index 25524e8..568ead5 100644
+--- a/src/i18n/en.json
++++ b/src/i18n/en.json
+@@ -3,5 +3,13 @@
+   "checkout.subtotal": "Subtotal",
+   "checkout.shipping": "Shipping",
+   "checkout.total": "Total",
+-  "checkout.pay": "Pay {amount}"
++  "checkout.pay": "Pay {amount}",
++  "giftCard.label": "Gift card",
++  "giftCard.apply": "Apply",
++  "giftCard.remove": "Remove",
++  "giftCard.line": "Gift card ending in {code}",
++  "giftCard.error.not_found": "We could not find this gift card.",
++  "giftCard.error.expired": "This gift card has expired.",
++  "giftCard.error.empty": "This gift card has no balance left.",
++  "giftCard.error.generic": "Something went wrong. Please try again."
+ }

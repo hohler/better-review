@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Better Review hero</title>
+<style>
+  /* Framed hero image: capture.sh renders this page at 1600x1000 into docs/screenshots/hero.png. */
+  * { box-sizing: border-box; }
+  body { margin: 0; width: 1600px; height: 1000px; overflow: hidden; font-family: -apple-system, system-ui, sans-serif; color: #fff; background: radial-gradient(1200px 700px at 15% 0%, #4b50c8 0%, transparent 60%), radial-gradient(900px 600px at 100% 100%, #1f7a5c 0%, transparent 55%), #14151c; }
+  header { padding: 64px 96px 0; }
+  h1 { margin: 0; font-size: 60px; letter-spacing: -0.03em; line-height: 1.05; }
+  p { margin: 16px 0 0; max-width: 900px; font-size: 24px; line-height: 1.4; color: rgb(255 255 255 / .78); }
+  .window { position: absolute; left: 96px; right: 96px; top: 300px; border-radius: 14px 14px 0 0; overflow: hidden; background: #f4f4f5; box-shadow: 0 40px 120px rgb(0 0 0 / .55), 0 0 0 1px rgb(255 255 255 / .12); }
+  .bar { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 16px; background: #e7e7ea; border-bottom: 1px solid #d5d5da; }
+  .bar i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; }
+  .bar i:nth-child(2) { background: #febc2e; }
+  .bar i:nth-child(3) { background: #28c840; }
+  .bar span { flex: 1; margin-right: 52px; text-align: center; font-size: 13px; font-weight: 600; color: #55565c; }
+  img { display: block; width: 100%; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Review pull requests<br>with a guide at your side.</h1>
+  <p>Better Review groups the changed files, explains what happens and walks you through a Bitbucket pull request step by step.</p>
+</header>
+<div class="window">
+  <div class="bar"><i></i><i></i><i></i><span>Better Review</span></div>
+  <img src="../screenshots/guide-light.png" alt="">
+</div>
+</body>
+</html>

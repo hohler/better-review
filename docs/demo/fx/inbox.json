@@ -1,0 +1,94 @@
+{
+ "workspace": "acme",
+ "currentUser": {
+  "displayName": "Alex Morgan",
+  "uuid": "{me}"
+ },
+ "items": [
+  {
+   "id": 482,
+   "title": "SHOP-1284: Redeem gift cards at checkout",
+   "state": "OPEN",
+   "draft": false,
+   "repo": "acme/storefront",
+   "link": "https://bitbucket.org/acme/storefront/pull-requests/482",
+   "author": {
+    "displayName": "Priya Nair"
+   },
+   "updatedOn": "@-2h",
+   "attention": {
+    "role": "reviewer",
+    "approved": false,
+    "participantState": null
+   }
+  },
+  {
+   "id": 479,
+   "title": "SHOP-1271: Retry failed payment webhooks",
+   "state": "OPEN",
+   "draft": false,
+   "repo": "acme/storefront",
+   "link": "https://bitbucket.org/acme/storefront/pull-requests/479",
+   "author": {
+    "displayName": "Jonas Weber"
+   },
+   "updatedOn": "@-5h",
+   "attention": {
+    "role": "reviewer",
+    "approved": false,
+    "participantState": "changes_requested"
+   }
+  },
+  {
+   "id": 131,
+   "title": "DS-88: Skeleton loading state for Card",
+   "state": "OPEN",
+   "draft": false,
+   "repo": "acme/design-system",
+   "link": "https://bitbucket.org/acme/design-system/pull-requests/131",
+   "author": {
+    "displayName": "Lena Frei"
+   },
+   "updatedOn": "@-9h",
+   "attention": {
+    "role": "reviewer",
+    "approved": false,
+    "participantState": null
+   }
+  },
+  {
+   "id": 477,
+   "title": "SHOP-1266: Cache product search results",
+   "state": "OPEN",
+   "draft": false,
+   "repo": "acme/storefront",
+   "link": "https://bitbucket.org/acme/storefront/pull-requests/477",
+   "author": {
+    "displayName": "Jonas Weber"
+   },
+   "updatedOn": "@-26h",
+   "attention": {
+    "role": "reviewer",
+    "approved": true,
+    "participantState": "approved"
+   }
+  },
+  {
+   "id": 57,
+   "title": "APP-340: Deep links for order tracking",
+   "state": "OPEN",
+   "draft": false,
+   "repo": "acme/mobile-app",
+   "link": "https://bitbucket.org/acme/mobile-app/pull-requests/57",
+   "author": {
+    "displayName": "Marco Rossi"
+   },
+   "updatedOn": "@-49h",
+   "attention": {
+    "role": "reviewer",
+    "approved": true,
+    "participantState": "approved"
+   }
+  }
+ ]
+}

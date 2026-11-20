@@ -1,0 +1,70 @@
+{
+ "briefing": "This PR lets a customer pay part or all of an order with a gift card. Everything hangs on one pure function, `applyGiftCard`, which decides how much of the card is used. A small service fetches the card from the server and rejects cards that are unknown, expired or empty. The checkout hook then subtracts the applied amount from the total, and the order summary shows an input for the code and a line for the deduction.",
+ "stops": [
+  {
+   "title": "The gift card and the redemption rule",
+   "hunks": [
+    "H8"
+   ],
+   "explanation": "Start here: this file defines what a gift card is and the one rule the whole feature rests on. `applyGiftCard` takes the order total and a card and returns how much is paid by the card and how much stays on it. The deduction is capped at the total, so a 50 EUR card on a 32 EUR order leaves 18 EUR on the card.",
+   "check": "An expired card returns `applied: 0` but still reports its full balance as `remaining`. Decide whether callers may rely on that."
+  },
+  {
+   "title": "Looking the card up on the server",
+   "hunks": [
+    "H1",
+    "H7"
+   ],
+   "explanation": "The service is the only place that talks to the server. It strips spaces and dashes from the typed code, calls the new `giftCards` route and maps the three ways a card can be refused to a `GiftCardError` with a typed `reason`. The UI later uses that reason to pick the error text.",
+   "check": "A 404 is handled, but any other failed response goes straight to `response.json()`. Check what a 500 does here."
+  },
+  {
+   "title": "The checkout total subtracts the card",
+   "hunks": [
+    "H5",
+    "H6"
+   ],
+   "explanation": "The checkout hook now keeps the selected card in state. It applies the card to subtotal plus shipping, so shipping can be paid with the card too, and subtracts the applied amount from `total`. The card, the amount and the setter are returned for the summary.",
+   "check": "Changing the shipping method recalculates the deduction on every render. Confirm that is intended and not a stale amount."
+  },
+  {
+   "title": "Entering a code",
+   "hunks": [
+    "H2"
+   ],
+   "explanation": "A small form component: it holds the typed code, calls `lookupGiftCard` and hands the card to its parent through `onApply`. A `GiftCardError` is translated by its `reason`, anything else shows the generic message. The button is disabled while the lookup runs.",
+   "check": ""
+  },
+  {
+   "title": "Showing it in the order summary",
+   "hunks": [
+    "H3",
+    "H4"
+   ],
+   "explanation": "The summary reads the new values from the hook. With a card applied it shows a line with the last four characters of the code, the deduction and a remove button. Without one it shows the input from the previous stop.",
+   "check": "Only the last four characters of the code are shown. Make sure the full code is not logged or rendered elsewhere."
+  },
+  {
+   "title": "Texts",
+   "hunks": [
+    "H9"
+   ],
+   "explanation": "The English strings for the input, the summary line and the four error cases. The keys match the `reason` values of `GiftCardError`.",
+   "check": ""
+  }
+ ],
+ "tests": "The spec covers the redemption rule: full payment, a balance smaller than the total, and an expired card. The lookup service and the input component have no tests.",
+ "questions": [
+  "Should other languages get the new strings in this PR, or is English enough for the first release?",
+  "What happens to the applied card when the cart changes after it was entered?"
+ ],
+ "_meta": {
+  "agent": "claude",
+  "model": "claude-opus-5-5",
+  "input": 5240,
+  "output": 1490,
+  "seconds": 24.8,
+  "cost": 0.19,
+  "at": "@ms-1h"
+ }
+}

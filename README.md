@@ -2,6 +2,16 @@
 
 Guided pull request reviews for Bitbucket, as a desktop app for macOS and Windows (Tauri).
 
+![Better Review showing the guide for a pull request](docs/screenshots/hero.png)
+
+| Guide | Tour |
+| --- | --- |
+| ![Guide: files grouped by topic with a summary](docs/screenshots/guide-light.png) | ![Tour: one stop with explanation and check](docs/screenshots/tour-dark.png) |
+| **Diff and comments** | **Settings** |
+| ![Diff with an inline comment thread](docs/screenshots/diff-light.png) | ![Settings: agent and model per guide and tour](docs/screenshots/settings-dark.png) |
+
+The screenshots show invented data (`docs/demo`). To redo them, serve the repository root on port 4718 and run `docs/demo/capture.sh`.
+
 ## Requirements
 
 - `twg` CLI, logged in to the Bitbucket workspaces you review in
