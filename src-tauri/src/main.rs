@@ -265,7 +265,7 @@ async fn agent_test(agent: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn comment(repo: String, id: u64, text: String, path: Option<String>, line: Option<u32>, from_line: Option<u32>, reply_to: Option<u64>) -> Result<String, String> {
+async fn comment(repo: String, id: u64, text: String, path: Option<String>, line: Option<u32>, from_line: Option<u32>, reply_to: Option<u64>, pending: Option<bool>) -> Result<String, String> {
     slug(&repo, true)?;
     if text.trim().is_empty() {
         return Err("Empty comment".into());
@@ -282,6 +282,10 @@ async fn comment(repo: String, id: u64, text: String, path: Option<String>, line
     }
     if let Some(r) = reply_to {
         args.push(format!("--reply-to={r}"));
+    }
+    // Pending comments stay private until the review is finished in Bitbucket.
+    if pending == Some(true) {
+        args.push("--pending".into());
     }
     bg(move || run("twg", &args.iter().map(String::as_str).collect::<Vec<_>>(), None)).await
 }

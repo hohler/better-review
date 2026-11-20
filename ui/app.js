@@ -278,17 +278,24 @@ function commentForm(send, onCancel, { value = '', label = 'Comment', lang = '' 
     h('span', { className: 'grow' }),
     toggle,
   );
-  const form = h('form', { className: 'comment' }, tools, area, preview, h('div', {}, btn, onCancel && h('button', { type: 'button', textContent: 'Cancel', onclick: onCancel })), err);
-  form.onsubmit = async (e) => {
-    e.preventDefault();
-    if (!area.value.trim()) return;
+  // Two ways to send a new comment: post it now, or keep it pending as part of a review. Editing only saves.
+  const later = !value && h('button', { type: 'button', textContent: 'Add to review', title: 'Saved as pending: only you see it until you finish the review in Bitbucket', onclick: () => go(true) });
+  const form = h('form', { className: 'comment' }, tools, area, preview, h('div', {}, btn, later, onCancel && h('button', { type: 'button', textContent: 'Cancel', onclick: onCancel })), err);
+  const go = async (pending) => {
+    if (!area.value.trim() || btn.disabled) return;
     btn.disabled = true;
+    if (later) later.disabled = true;
     try {
-      await send(area.value);
+      await send(area.value, pending);
     } catch (ex) {
       err.textContent = String(ex);
       btn.disabled = false;
+      if (later) later.disabled = false;
     }
+  };
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    go(false);
   };
   area.onkeydown = (e) => {
     if (e.metaKey && e.key === 'Enter') form.requestSubmit();
@@ -309,7 +316,7 @@ function threadEl(root, comments, post, lang) {
   const slot = h('div');
   const reply = h('button', {
     textContent: 'Reply',
-    onclick: () => set(slot, commentForm((text) => post({ text, replyTo: root.id }), () => set(slot, reply), { lang })),
+    onclick: () => set(slot, commentForm((text, pending) => post({ text, pending, replyTo: root.id }), () => set(slot, reply), { lang })),
   });
   slot.append(reply);
   const item = (c) => {
@@ -337,7 +344,7 @@ function threadEl(root, comments, post, lang) {
       post({ remove: c.id }).catch((e) => (del.textContent = String(e)));
     };
     const mine = c.user?.uuid && c.user.uuid === myUuid();
-    return h('div', { className: 'comment' }, h('div', { className: 'chead' }, h('b', { textContent: c.user?.display_name ?? '?' }), h('small', { textContent: `${ago(c.created_on)}${c === root && root.resolution ? ' · resolved' : ''}` }), h('span', { className: 'grow' }), mine && [edit, del]), body);
+    return h('div', { className: 'comment' }, h('div', { className: 'chead' }, h('b', { textContent: c.user?.display_name ?? '?' }), h('small', { textContent: `${ago(c.created_on)}${c === root && root.resolution ? ' · resolved' : ''}` }), c.pending && h('span', { className: 'tag pending', textContent: 'Pending', title: 'Only you see this until you finish the review in Bitbucket' }), h('span', { className: 'grow' }), mine && [edit, del]), body);
   };
   return h('div', { className: 'thread' + (root.resolution ? ' resolved' : '') }, all.map(item), slot);
 }
@@ -439,7 +446,7 @@ function fileEl(f, hidden, ctx, only) {
         const anchor = l.t === '-' ? { fromLine: l.o } : { line: l.n };
         const start = () => {
           if (row.nextSibling?.dataset.form) return row.nextSibling.remove();
-          const tr = note(commentForm((text) => post({ text, path: f.path, ...anchor }), () => tr.remove(), { lang }));
+          const tr = note(commentForm((text, pending) => post({ text, pending, path: f.path, ...anchor }), () => tr.remove(), { lang }));
           tr.dataset.form = '1';
           row.after(tr);
         };
@@ -472,6 +479,7 @@ function draw(repo, id, data, guide) {
   const byPath = Object.fromEntries(files.map((f) => [f.path, f]));
   const comments = (pr._comments ?? []).filter((c) => !c.deleted);
   const general = comments.filter((c) => !c.parent && !c.inline);
+  const pendingCount = comments.filter((c) => c.pending).length;
   const mine = pr.participants?.find((p) => p.user?.uuid === myUuid());
   const changes = mine?.state === 'changes_requested';
   const redraw = () => {
@@ -610,7 +618,7 @@ function draw(repo, id, data, guide) {
               h('p', { className: 'lead', textContent: done.size >= t.stops.length ? `You have been through all ${t.stops.length} stops.` : `You have been through ${done.size} of ${t.stops.length} stops. Skipped stops are marked in the bar above.` }),
               t.questions.length > 0 && [h('h3', { textContent: 'Worth raising with the author' }), h('ul', {}, t.questions.map((q) => h('li', {}, rich(q))))],
               h('h3', { textContent: 'Leave a general comment' }),
-              commentForm((text) => post({ text })),
+              commentForm((text, pending) => post({ text, pending })),
               h('div', { className: 'verdict' }, h('button', { className: changes ? 'on warn' : '', textContent: changes ? '✗ Changes requested' : 'Request changes', onclick: act(changes ? 'remove-request-changes' : 'request-changes') }), h('button', { className: mine?.approved ? 'on' : 'primary', textContent: mine?.approved ? '✓ Approved' : 'Approve', onclick: act(mine?.approved ? 'unapprove' : 'approve') })),
             ]
           : [
@@ -646,7 +654,7 @@ function draw(repo, id, data, guide) {
     overview: () => [
       guide && rich(g.summary, 'lead text'),
       pr.description && h('div', { className: 'box' }, h('h3', { textContent: 'Description' }), rich(pr.description)),
-      h('div', { className: 'box' }, h('h3', { textContent: `Discussion (${general.length})` }), general.map((c) => threadEl(c, comments, post)), commentForm((text) => post({ text }))),
+      h('div', { className: 'box' }, h('h3', { textContent: `Discussion (${general.length})` }), general.map((c) => threadEl(c, comments, post)), commentForm((text, pending) => post({ text, pending }))),
     ],
     // The guide is requested here, on first open of the tab, so opening a PR alone never spends an AI request.
     guide: () => {
@@ -671,6 +679,7 @@ function draw(repo, id, data, guide) {
       { className: 'top' },
       Object.keys(views).map((t) => h('button', { className: 'tab' + (t === tab ? ' active' : ''), textContent: t[0].toUpperCase() + t.slice(1), onclick: () => ((tab = t), draw(repo, id, data, guide)) })),
       h('span', { className: 'grow' }),
+      pendingCount > 0 && h('button', { className: 'on warn', textContent: `${pendingCount} pending · finish in Bitbucket`, title: 'Pending comments are published when you finish the review in Bitbucket', onclick: () => invoke('open_url', { url: pr.links.html.href }) }),
       h('button', { textContent: 'Open in Bitbucket', onclick: () => invoke('open_url', { url: pr.links.html.href }) }),
       h('button', { className: changes ? 'on warn' : '', textContent: changes ? '✗ Changes requested' : 'Request changes', onclick: act(changes ? 'remove-request-changes' : 'request-changes') }),
       h('button', { className: mine?.approved ? 'on' : 'primary', textContent: mine?.approved ? '✓ Approved' : 'Approve', onclick: act(mine?.approved ? 'unapprove' : 'approve') }),

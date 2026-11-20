@@ -197,3 +197,9 @@ form.comment .preview[hidden] { display: none; }
 .findbar button { padding: 2px 8px; }
 ::highlight(find) { background: #ffe58a; color: #1b1c1f; }
 ::highlight(find-current) { background: #ff9632; color: #1b1c1f; }
+
+/* Hovering a commentable line number swaps the number for a comment icon. */
+td.no:not(.plain) { position: relative; }
+td.no:not(.plain):hover { color: transparent; }
+td.no:not(.plain):hover::after { content: ''; position: absolute; right: 12px; top: 3px; width: 14px; height: 14px; background: var(--accent); mask: url('comment.svg') center / contain no-repeat; -webkit-mask: url('comment.svg') center / contain no-repeat; }
+.tag.pending { color: light-dark(#b45309, #f0a34a); border-color: currentColor; }
