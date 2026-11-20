@@ -153,3 +153,12 @@ td.no.plain:hover { color: var(--muted); }
 .verdict { display: flex; gap: 8px; margin-top: 24px; }
 .verdict button { padding: 6px 16px; }
 h1 a:hover { text-decoration: underline; }
+
+.spin { display: flex; gap: 14px; align-items: center; padding: 6px 0; }
+.spin b { font-weight: 600; }
+.spin small { display: block; }
+.spin .pct { color: var(--muted); font-variant-numeric: tabular-nums; }
+.ring { width: 22px; height: 22px; flex: none; border-radius: 50%; border: 2.5px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin .bar { width: 260px; height: 4px; border-radius: 99px; background: var(--line); margin-top: 8px; overflow: hidden; }
+.spin .bar i { display: block; height: 100%; width: 0; border-radius: 99px; background: var(--accent); transition: width .4s; }

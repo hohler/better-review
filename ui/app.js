@@ -1,4 +1,4 @@
-import { TEST, segments, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './lib.js';
+import { GENERATED, TEST, segments, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './lib.js';
 
 const { invoke } = window.__TAURI__.core;
 const side = document.getElementById('side');
@@ -26,6 +26,31 @@ const highlight = (el, text, lang) => {
 };
 const rich = (raw, className = 'text') =>
   h('div', { className }, segments(raw ?? '').map((s) => (s.type === 'block' ? h('pre', {}, highlight(h('code'), s.text, s.lang)) : s.type === 'code' ? h('code', { textContent: s.text }) : s.text)));
+// Progress: the backend streams Claude's answer as "ai-progress" events, keyed "guide:<key>" or "tour:<key>".
+const streamed = new Map(); // id -> answer text so far
+const painters = new Map(); // id -> repaint of the spinner currently showing that id
+window.__TAURI__.event?.listen('ai-progress', ({ payload }) => {
+  streamed.set(payload.id, (streamed.get(payload.id) ?? '') + payload.delta);
+  painters.get(payload.id)?.();
+});
+const VERBS = ['Pondering', 'Percolating', 'Noodling', 'Cogitating', 'Musing', 'Brewing', 'Churning', 'Conjuring', 'Ruminating', 'Simmering', 'Mulling', 'Spelunking', 'Tinkering', 'Untangling', 'Deliberating', 'Marinating', 'Puzzling', 'Wrangling', 'Synthesizing', 'Crafting', 'Sleuthing', 'Finagling'];
+// measure(text) returns 0..1 from the answer streamed so far; without it (or before the first item) only the verbs spin.
+function spinner(label, id, measure) {
+  const verb = h('b');
+  const pct = h('span', { className: 'pct' });
+  const bar = h('i');
+  const el = h('div', { className: 'spin' }, h('span', { className: 'ring' }), h('div', {}, h('div', {}, verb, '… ', pct), h('small', { textContent: label }), measure && h('div', { className: 'bar' }, bar)));
+  const turn = () => (verb.textContent = VERBS[(Math.random() * VERBS.length) | 0]);
+  const paint = () => {
+    const p = Math.min(0.99, measure(streamed.get(id) ?? ''));
+    pct.textContent = p > 0 ? `${Math.round(p * 100)}%` : '';
+    bar.style.width = `${p * 100}%`;
+  };
+  turn();
+  if (measure) painters.set(id, paint), paint();
+  const timer = setInterval(() => (el.isConnected ? turn() : clearInterval(timer)), 2600);
+  return el;
+}
 const key = (repo, id) => `${repo}#${id}`;
 
 let workspaces = load('workspaces', ['entwicklungspark']);
@@ -189,7 +214,7 @@ async function select(repo, id, keepScroll) {
   const k = (current = key(repo, id));
   const y = main.scrollTop;
   renderSide();
-  if (!keepScroll) set(main, h('p', { className: 'muted', textContent: 'Loading…' }));
+  if (!keepScroll) set(main, spinner('Loading the pull request'));
   try {
     const data = await loadPr(repo, id);
     if (current !== k) return;
@@ -382,6 +407,8 @@ function fileEl(f, hidden, ctx, only) {
 function draw(repo, id, data, guide) {
   const { pr, files } = data;
   tourNav = null;
+  const aiKey = `${repo}-${id}-${pr.source.commit.hash}`; // same key the backend gets, so progress events match
+  const core = files.filter((f) => !GENERATED.test(f.path));
   const g = guide ?? normalizeGuide(null, files);
   const byPath = Object.fromEntries(files.map((f) => [f.path, f]));
   const comments = (pr._comments ?? []).filter((c) => !c.deleted);
@@ -463,7 +490,9 @@ function draw(repo, id, data, guide) {
     const k = key(repo, id);
     const t = tourDone.get(k);
     if (!t) {
-      const box = h('div', { className: 'tour' }, h('p', { className: 'muted', textContent: 'Preparing the tour. For a large pull request this can take up to a minute…' }));
+      // Tour progress: share of hunk ids the answer has already placed in a stop.
+      const total = tourHunks(files).length || 1;
+      const box = h('div', { className: 'tour' }, spinner('Preparing the tour. A large pull request takes about a minute.', `tour:${aiKey}`, (text) => new Set(text.match(/"H\d+"/g)).size / total));
       loadTour(repo, id).then(
         () => current === k && tab === 'tour' && box.isConnected && draw(repo, id, data, guide),
         (e) => box.isConnected && set(box, h('p', { className: 'error', textContent: `Tour failed: ${e}` }), h('button', { textContent: 'Try again', onclick: () => draw(repo, id, data, guide) })),
@@ -560,7 +589,8 @@ function draw(repo, id, data, guide) {
     ),
     h('h1', {}, title),
     h('p', { className: 'meta' }, h('span', { textContent: `${pr.author?.display_name ?? '?'} · ` }), h('code', { textContent: `${pr.destination.branch.name} ← ${pr.source.branch.name}` }), h('span', { textContent: ` · ${repo} #${id} · ${files.length} files · ${reviewed.size} reviewed · updated ${ago(pr.updated_on)}` })),
-    !guide && h('div', { className: 'guide' }, h('p', { className: 'muted', textContent: 'Generating review guide…' })),
+    // Guide progress: share of source files the answer has already placed in a group.
+    !guide && h('div', { className: 'guide' }, spinner('Preparing the review guide', `guide:${aiKey}`, (text) => core.filter((f) => text.includes(JSON.stringify(f.path))).length / (core.length || 1))),
     views[tab](),
   );
   main.scrollTop = 0;

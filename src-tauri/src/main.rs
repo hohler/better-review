@@ -2,10 +2,11 @@
 
 use std::{
     fs,
-    io::Write,
+    io::{BufRead, BufReader, Read, Write},
     path::PathBuf,
-    process::{Command, Stdio},
+    process::{Child, Command, Stdio},
 };
+use tauri::Emitter;
 
 // Aliases follow the newest model of each tier. The guide is preloaded for every PR, so it stays on the cheaper tier.
 const GUIDE_MODEL: &str = "sonnet";
@@ -23,7 +24,7 @@ fn home() -> String {
 }
 
 // Launched from Finder there is no shell PATH, so prepend the usual CLI locations.
-fn run(bin: &str, args: &[&str], stdin: Option<String>) -> Result<String, String> {
+fn spawn(bin: &str, args: &[&str], stdin: Option<String>) -> Result<Child, String> {
     let path = format!(
         "{}/.local/bin:/opt/homebrew/bin:/usr/local/bin:{}",
         home(),
@@ -42,7 +43,11 @@ fn run(bin: &str, args: &[&str], stdin: Option<String>) -> Result<String, String
         let mut pipe = child.stdin.take().unwrap();
         std::thread::spawn(move || pipe.write_all(s.as_bytes()));
     }
-    let out = child.wait_with_output().map_err(|e| e.to_string())?;
+    Ok(child)
+}
+
+fn run(bin: &str, args: &[&str], stdin: Option<String>) -> Result<String, String> {
+    let out = spawn(bin, args, stdin)?.wait_with_output().map_err(|e| e.to_string())?;
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     if out.status.success() {
         return Ok(stdout);
@@ -113,29 +118,52 @@ async fn file(repo: String, path: String, hash: String) -> Result<String, String
 }
 
 // Runs claude headless with a JSON schema and caches the structured result.
-fn ai(cache_key: &str, model: &str, fallback: Option<&str>, system: &str, schema: &str, input: String) -> Result<String, String> {
+// While it writes, each chunk of the answer is sent to the webview as an "ai-progress" event, which is what the progress bar measures.
+fn ai(app: &tauri::AppHandle, id: &str, cache_key: &str, model: &str, fallback: Option<&str>, system: &str, schema: &str, input: String) -> Result<String, String> {
     cached(cache_key, || {
-        let mut args = vec!["-p", "--model", model, "--tools", "", "--strict-mcp-config", "--setting-sources", "", "--output-format", "json", "--json-schema", schema, "--system-prompt", system];
+        let mut args = vec!["-p", "--model", model, "--tools", "", "--strict-mcp-config", "--setting-sources", "", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--json-schema", schema, "--system-prompt", system];
         if let Some(f) = fallback {
             args.extend(["--fallback-model", f]);
         }
-        let out = run("claude", &args, Some(input))?;
-        let v: serde_json::Value = serde_json::from_str(&out).map_err(|e| format!("claude: {e}"))?;
-        match v.get("structured_output") {
+        let mut child = spawn("claude", &args, Some(input))?;
+        // Drain stderr on its own thread so a chatty child can never block on a full pipe.
+        let mut err_pipe = child.stderr.take().unwrap();
+        let err_thread = std::thread::spawn(move || {
+            let mut s = String::new();
+            err_pipe.read_to_string(&mut s).ok();
+            s
+        });
+        let mut result = None;
+        for line in BufReader::new(child.stdout.take().unwrap()).lines().map_while(Result::ok) {
+            let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
+            if v["type"] == "stream_event" {
+                if let Some(delta) = v["event"]["delta"]["partial_json"].as_str() {
+                    app.emit("ai-progress", serde_json::json!({ "id": id, "delta": delta })).ok();
+                }
+            } else if v["type"] == "result" {
+                result = Some(v);
+            }
+        }
+        child.wait().ok();
+        let stderr = err_thread.join().unwrap_or_default();
+        match result.as_ref().map(|v| &v["structured_output"]) {
             Some(s) if s.is_object() => Ok(s.to_string()),
-            _ => Err(format!("claude returned no result: {}", v.get("result").and_then(|r| r.as_str()).unwrap_or("?"))),
+            _ => {
+                let said = result.as_ref().and_then(|v| v["result"].as_str()).unwrap_or("").trim().to_string();
+                Err(format!("claude returned no result: {}", if said.is_empty() { stderr.trim() } else { &said }))
+            }
         }
     })
 }
 
 #[tauri::command]
-async fn guide(key: String, input: String) -> Result<String, String> {
-    bg(move || ai(&format!("guide-{key}"), GUIDE_MODEL, None, SYSTEM, SCHEMA, input)).await
+async fn guide(app: tauri::AppHandle, key: String, input: String) -> Result<String, String> {
+    bg(move || ai(&app, &format!("guide:{key}"), &format!("guide-{key}"), GUIDE_MODEL, None, SYSTEM, SCHEMA, input)).await
 }
 
 #[tauri::command]
-async fn tour(key: String, input: String) -> Result<String, String> {
-    bg(move || ai(&format!("tour-{TOUR_MODEL}-{key}"), TOUR_MODEL, Some(TOUR_FALLBACK), TOUR_SYSTEM, TOUR_SCHEMA, input)).await
+async fn tour(app: tauri::AppHandle, key: String, input: String) -> Result<String, String> {
+    bg(move || ai(&app, &format!("tour:{key}"), &format!("tour-{TOUR_MODEL}-{key}"), TOUR_MODEL, Some(TOUR_FALLBACK), TOUR_SYSTEM, TOUR_SCHEMA, input)).await
 }
 
 #[tauri::command]
