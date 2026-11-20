@@ -205,3 +205,8 @@ td.no:not(.plain):hover::after { content: ''; position: absolute; right: 12px; t
 .tag.pending { color: light-dark(#b45309, #f0a34a); border-color: currentColor; }
 
 .aifoot { text-align: center; color: var(--muted); font-size: 12px; margin: 32px 0 0; }
+
+/* Guide file rows: the name may shrink with an ellipsis, the folder takes what is left, the stats never move. */
+.frow > .ficon + span { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.frow > .dir { flex: 1 1 0; }
+.frow > .stats { flex: none; }
