@@ -117,53 +117,151 @@ async fn file(repo: String, path: String, hash: String) -> Result<String, String
     .await
 }
 
-// Runs claude headless with a JSON schema and caches the structured result.
-// While it writes, each chunk of the answer is sent to the webview as an "ai-progress" event, which is what the progress bar measures.
-fn ai(app: &tauri::AppHandle, id: &str, cache_key: &str, model: &str, fallback: Option<&str>, system: &str, schema: &str, input: String) -> Result<String, String> {
-    cached(cache_key, || {
-        let mut args = vec!["-p", "--model", model, "--tools", "", "--strict-mcp-config", "--setting-sources", "", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--json-schema", schema, "--system-prompt", system];
-        if let Some(f) = fallback {
-            args.extend(["--fallback-model", f]);
+const CLI_DIRS: [&str; 2] = ["/opt/homebrew/bin", "/usr/local/bin"];
+
+// Runs a CLI that prints one JSON object per line, hands each to on_line, and returns its stderr.
+fn stream(bin: &str, args: &[&str], stdin: String, mut on_line: impl FnMut(&serde_json::Value)) -> Result<String, String> {
+    let mut child = spawn(bin, args, Some(stdin))?;
+    // Drain stderr on its own thread so a chatty child can never block on a full pipe.
+    let mut err_pipe = child.stderr.take().unwrap();
+    let err_thread = std::thread::spawn(move || {
+        let mut s = String::new();
+        err_pipe.read_to_string(&mut s).ok();
+        s
+    });
+    for line in BufReader::new(child.stdout.take().unwrap()).lines().map_while(Result::ok) {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) {
+            on_line(&v);
         }
-        let mut child = spawn("claude", &args, Some(input))?;
-        // Drain stderr on its own thread so a chatty child can never block on a full pipe.
-        let mut err_pipe = child.stderr.take().unwrap();
-        let err_thread = std::thread::spawn(move || {
-            let mut s = String::new();
-            err_pipe.read_to_string(&mut s).ok();
-            s
-        });
-        let mut result = None;
-        for line in BufReader::new(child.stdout.take().unwrap()).lines().map_while(Result::ok) {
-            let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
-            if v["type"] == "stream_event" {
-                if let Some(delta) = v["event"]["delta"]["partial_json"].as_str() {
+    }
+    child.wait().ok();
+    Ok(err_thread.join().unwrap_or_default().trim().to_string())
+}
+
+// Claude enforces the schema itself and returns the object as structured_output.
+fn claude(app: &tauri::AppHandle, id: &str, strong: bool, system: &str, schema: &str, input: String) -> Result<String, String> {
+    let mut args = vec!["-p", "--model", if strong { TOUR_MODEL } else { GUIDE_MODEL }, "--tools", "", "--strict-mcp-config", "--setting-sources", "", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--json-schema", schema, "--system-prompt", system];
+    if strong {
+        args.extend(["--fallback-model", TOUR_FALLBACK]);
+    }
+    let mut result = None;
+    let stderr = stream("claude", &args, input, |v| {
+        if v["type"] == "stream_event" {
+            if let Some(delta) = v["event"]["delta"]["partial_json"].as_str() {
+                app.emit("ai-progress", serde_json::json!({ "id": id, "delta": delta })).ok();
+            }
+        } else if v["type"] == "result" {
+            result = Some(v.clone());
+        }
+    })?;
+    match result.as_ref().map(|v| &v["structured_output"]) {
+        Some(s) if s.is_object() => Ok(s.to_string()),
+        _ => {
+            let said = result.as_ref().and_then(|v| v["result"].as_str()).unwrap_or("").trim().to_string();
+            Err(format!("claude returned no result: {}", if said.is_empty() { &stderr } else { &said }))
+        }
+    }
+}
+
+// Copilot's flags that turn the agent into a plain text generator: no tools, no MCP servers, no repo instructions, empty folder.
+fn copilot_args(dir: &str) -> Vec<&str> {
+    vec!["-C", dir, "--available-tools", "--no-custom-instructions", "--disable-builtin-mcps", "--no-ask-user", "--no-auto-update", "--model", "auto"]
+}
+
+fn empty_dir() -> String {
+    let dir = std::env::temp_dir().join("better-review-empty");
+    fs::create_dir_all(&dir).ok();
+    dir.to_string_lossy().into_owned()
+}
+
+// Copilot has no schema option: the schema goes into the prompt and the answer is checked here, with one retry.
+// The model is "auto" because the models on offer depend on each person's Copilot plan.
+fn copilot(app: &tauri::AppHandle, id: &str, system: &str, schema: &str, input: String) -> Result<String, String> {
+    let prompt = format!("{system}\n\nAnswer with one JSON object only, no prose and no code fence, matching this JSON Schema:\n{schema}\n\n--- PULL REQUEST ---\n{input}");
+    let required: Vec<String> = serde_json::from_str::<serde_json::Value>(schema).ok().and_then(|s| s["required"].as_array().cloned()).unwrap_or_default().iter().filter_map(|k| k.as_str().map(str::to_owned)).collect();
+    let dir = empty_dir();
+    let mut args = copilot_args(&dir);
+    args.extend(["--output-format", "json", "--stream", "on"]);
+    let mut last = String::new();
+    for _ in 0..2 {
+        app.emit("ai-progress", serde_json::json!({ "id": id, "reset": true })).ok();
+        let (mut answer, mut error) = (String::new(), String::new());
+        let stderr = stream("copilot", &args, prompt.clone(), |v| match v["type"].as_str() {
+            Some("assistant.message_delta") => {
+                if let Some(delta) = v["data"]["deltaContent"].as_str() {
                     app.emit("ai-progress", serde_json::json!({ "id": id, "delta": delta })).ok();
                 }
-            } else if v["type"] == "result" {
-                result = Some(v);
             }
+            Some("assistant.message") => answer = v["data"]["content"].as_str().unwrap_or("").to_string(),
+            Some("session.error") => error = v["data"]["message"].as_str().unwrap_or("").to_string(),
+            _ => {}
+        })?;
+        if !error.is_empty() || answer.is_empty() {
+            // A failed call (not logged in, model unavailable) will not get better on a retry.
+            return Err(format!("copilot: {}", if !error.is_empty() { error } else if !stderr.is_empty() { stderr } else { "no answer".into() }));
         }
-        child.wait().ok();
-        let stderr = err_thread.join().unwrap_or_default();
-        match result.as_ref().map(|v| &v["structured_output"]) {
-            Some(s) if s.is_object() => Ok(s.to_string()),
-            _ => {
-                let said = result.as_ref().and_then(|v| v["result"].as_str()).unwrap_or("").trim().to_string();
-                Err(format!("claude returned no result: {}", if said.is_empty() { stderr.trim() } else { &said }))
+        let json = match (answer.find('{'), answer.rfind('}')) {
+            (Some(a), Some(b)) if a < b => &answer[a..=b],
+            _ => "",
+        };
+        match serde_json::from_str::<serde_json::Value>(json) {
+            Ok(v) if v.is_object() && required.iter().all(|k| v.get(k).is_some()) => return Ok(v.to_string()),
+            Ok(_) => last = "the answer is missing required fields".into(),
+            Err(e) => last = format!("the answer is not valid JSON ({e})"),
+        }
+    }
+    Err(format!("copilot: {last}"))
+}
+
+fn ai(app: &tauri::AppHandle, kind: &str, key: &str, agent: &str, system: &str, schema: &str, input: String) -> Result<String, String> {
+    let strong = kind == "tour";
+    let id = format!("{kind}:{key}");
+    // The agent (and for Claude the model tier) is part of the cache key, so switching regenerates.
+    match agent {
+        "claude" => cached(&if strong { format!("tour-{TOUR_MODEL}-{key}") } else { format!("guide-{key}") }, || claude(app, &id, strong, system, schema, input)),
+        "copilot" => cached(&format!("{kind}-copilot-{key}"), || copilot(app, &id, system, schema, input)),
+        _ => Err(format!("Unknown agent: {agent}")),
+    }
+}
+
+#[tauri::command]
+async fn guide(app: tauri::AppHandle, key: String, input: String, agent: String) -> Result<String, String> {
+    bg(move || ai(&app, "guide", &key, &agent, SYSTEM, SCHEMA, input)).await
+}
+
+#[tauri::command]
+async fn tour(app: tauri::AppHandle, key: String, input: String, agent: String) -> Result<String, String> {
+    bg(move || ai(&app, "tour", &key, &agent, TOUR_SYSTEM, TOUR_SCHEMA, input)).await
+}
+
+// Which of the CLIs the app depends on are installed, for the setup wizard.
+#[tauri::command]
+fn installed() -> serde_json::Value {
+    let mut dirs = vec![format!("{}/.local/bin", home())];
+    dirs.extend(CLI_DIRS.iter().map(|d| d.to_string()));
+    dirs.extend(std::env::var("PATH").unwrap_or_default().split(':').map(str::to_owned));
+    let has = |bin: &str| dirs.iter().any(|d| PathBuf::from(d).join(bin).is_file());
+    serde_json::json!({ "claude": has("claude"), "copilot": has("copilot"), "twg": has("twg") })
+}
+
+// Sends a one-line prompt, so the wizard can show whether the agent is installed, logged in and allowed.
+#[tauri::command]
+async fn agent_test(agent: String) -> Result<String, String> {
+    bg(move || {
+        let prompt = "Reply with the single word OK.".to_string();
+        match agent.as_str() {
+            "claude" => run("claude", &["-p", "--model", GUIDE_MODEL, "--tools", "", "--strict-mcp-config", "--setting-sources", ""], Some(prompt)),
+            "copilot" => {
+                let dir = empty_dir();
+                let mut args = copilot_args(&dir);
+                args.push("--silent");
+                run("copilot", &args, Some(prompt))
             }
+            _ => Err(format!("Unknown agent: {agent}")),
         }
+        .map(|s| s.trim().to_string())
     })
-}
-
-#[tauri::command]
-async fn guide(app: tauri::AppHandle, key: String, input: String) -> Result<String, String> {
-    bg(move || ai(&app, &format!("guide:{key}"), &format!("guide-{key}"), GUIDE_MODEL, None, SYSTEM, SCHEMA, input)).await
-}
-
-#[tauri::command]
-async fn tour(app: tauri::AppHandle, key: String, input: String) -> Result<String, String> {
-    bg(move || ai(&app, &format!("tour:{key}"), &format!("tour-{TOUR_MODEL}-{key}"), TOUR_MODEL, Some(TOUR_FALLBACK), TOUR_SYSTEM, TOUR_SCHEMA, input)).await
+    .await
 }
 
 #[tauri::command]
@@ -210,7 +308,22 @@ fn open_url(url: String) -> Result<(), String> {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![inbox, pr, diff, file, guide, tour, comment, review, open_url])
+        .setup(|app| {
+            use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+            // Replacing the default menu drops Edit too, and without it copy and paste stop working in text fields.
+            let settings = MenuItemBuilder::with_id("settings", "Settings…").accelerator("CmdOrCtrl+,").build(app)?;
+            let app_menu = SubmenuBuilder::new(app, "Better Review").about(None).separator().item(&settings).separator().services().separator().hide().hide_others().show_all().separator().quit().build()?;
+            let edit = SubmenuBuilder::new(app, "Edit").undo().redo().separator().cut().copy().paste().select_all().build()?;
+            let window = SubmenuBuilder::new(app, "Window").minimize().fullscreen().separator().close_window().build()?;
+            app.set_menu(MenuBuilder::new(app).items(&[&app_menu, &edit, &window]).build()?)?;
+            app.on_menu_event(|app, event| {
+                if event.id() == "settings" {
+                    app.emit("open-settings", ()).ok();
+                }
+            });
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![inbox, pr, diff, file, guide, tour, installed, agent_test, comment, review, open_url])
         .run(tauri::generate_context!())
         .expect("failed to start Better Review");
 }

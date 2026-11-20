@@ -30,7 +30,8 @@ const rich = (raw, className = 'text') =>
 const streamed = new Map(); // id -> answer text so far
 const painters = new Map(); // id -> repaint of the spinner currently showing that id
 window.__TAURI__.event?.listen('ai-progress', ({ payload }) => {
-  streamed.set(payload.id, (streamed.get(payload.id) ?? '') + payload.delta);
+  // reset: the backend starts over (a retry), so the text counted so far no longer applies.
+  streamed.set(payload.id, payload.reset ? '' : (streamed.get(payload.id) ?? '') + payload.delta);
   painters.get(payload.id)?.();
 });
 const VERBS = ['Pondering', 'Percolating', 'Noodling', 'Cogitating', 'Musing', 'Brewing', 'Churning', 'Conjuring', 'Ruminating', 'Simmering', 'Mulling', 'Spelunking', 'Tinkering', 'Untangling', 'Deliberating', 'Marinating', 'Puzzling', 'Wrangling', 'Synthesizing', 'Crafting', 'Sleuthing', 'Finagling'];
@@ -53,8 +54,12 @@ function spinner(label, id, measure) {
 }
 const key = (repo, id) => `${repo}#${id}`;
 
-let workspaces = load('workspaces', ['entwicklungspark']);
 let inboxes = load('inboxes', {});
+// No preset workspace: the setup wizard asks for it. Installs from before the wizard keep the ones they had loaded.
+let workspaces = load('workspaces', Object.keys(inboxes));
+let agent = load('agent', null); // 'claude' | 'copilot', null until the wizard ran
+// Preloading costs one AI request per open PR. On by default for Claude, off for Copilot where each one is a premium request.
+const preloadOn = () => load('preload', agent === 'claude');
 const errors = {};
 let current = null;
 const prs = new Map(); // key -> Promise<{pr, files}>
@@ -104,7 +109,7 @@ function loadGuide(repo, id) {
   const k = key(repo, id);
   if (!guides.has(k)) {
     const p = loadPr(repo, id).then(async ({ pr, files }) => {
-      const raw = await invoke('guide', { key: `${repo}-${id}-${pr.source.commit.hash}`, input: guideInput(pr, files) });
+      const raw = await invoke('guide', { key: `${repo}-${id}-${pr.source.commit.hash}`, input: guideInput(pr, files), agent });
       const guide = normalizeGuide(JSON.parse(raw), files);
       guideDone.set(k, guide);
       return guide;
@@ -120,7 +125,7 @@ function loadTour(repo, id) {
   const k = key(repo, id);
   if (!tours.has(k)) {
     const p = loadPr(repo, id).then(async ({ pr, files }) => {
-      const raw = await invoke('tour', { key: `${repo}-${id}-${pr.source.commit.hash}`, input: tourInput(pr, files) });
+      const raw = await invoke('tour', { key: `${repo}-${id}-${pr.source.commit.hash}`, input: tourInput(pr, files), agent });
       const tour = normalizeTour(JSON.parse(raw), files);
       tourDone.set(k, tour);
       return tour;
@@ -152,12 +157,13 @@ async function refresh() {
   const all = workspaces.flatMap((ws) => inboxes[ws]?.items ?? []);
   for (let i = 0; i < all.length; i += 4) await Promise.all(all.slice(i, i + 4).map((p) => (key(p.repo, p.id) === current ? null : (prs.delete(key(p.repo, p.id)), loadPr(p.repo, p.id).catch(() => {})))));
   // ponytail: guides preload one at a time, raise to 2-3 in parallel if the queue gets long.
+  if (!preloadOn()) return;
   for (const ws of workspaces) for (const i of inboxes[ws]?.items ?? []) await loadGuide(i.repo, i.id).catch(() => {});
 }
 
 function renderSide() {
   set(side, 
-    h('header', {}, h('strong', { textContent: 'Reviews' }), h('button', { textContent: '↻', title: 'Refresh', onclick: refresh })),
+    h('header', {}, h('strong', { textContent: 'Reviews' }), h('span', {}, h('button', { textContent: '⚙', title: 'Settings (Cmd+,)', onclick: () => openSettings(false) }), ' ', h('button', { textContent: '↻', title: 'Refresh', onclick: refresh }))),
     workspaces.map((ws) => {
       const items = inboxes[ws]?.items ?? [];
       const remove = () => {
@@ -628,5 +634,87 @@ grip.ondblclick = () => {
   save('sideWidth', 290);
 };
 
+const AGENTS = [
+  { id: 'claude', name: 'Claude Code', note: 'Sonnet writes the guide, Opus the tour.', install: 'Install the claude CLI and log in.' },
+  { id: 'copilot', name: 'GitHub Copilot', note: 'Copilot picks the model your plan allows. Each guide or tour is one premium request.', install: 'Install the copilot CLI and run "copilot login".' },
+];
+
+// One dialog for both cases: the setup wizard on first start (cannot be dismissed) and Settings later.
+async function openSettings(first) {
+  if (document.querySelector('dialog.settings')) return;
+  const found = await invoke('installed').catch(() => ({}));
+  let pick = agent ?? (found.copilot && !found.claude ? 'copilot' : 'claude');
+  let pre = agent ? preloadOn() : pick === 'claude';
+  const status = h('small');
+  const wsInput = h('input', { placeholder: 'e.g. my-company', value: workspaces[0] ?? '' });
+  const problem = h('p', { className: 'error' });
+  const dlg = h('dialog', { className: 'settings' });
+  const test = async () => {
+    status.className = '';
+    status.textContent = 'Testing, this sends one short request…';
+    try {
+      const reply = await invoke('agent_test', { agent: pick });
+      status.className = 'plus';
+      status.textContent = `Works. It replied: ${reply.slice(0, 60)}`;
+    } catch (e) {
+      status.className = 'minus';
+      status.textContent = String(e).slice(0, 300);
+    }
+  };
+  const done = () => {
+    const ws = wsInput.value.trim();
+    if (first && !/^[\w.-]+$/.test(ws)) return (problem.textContent = 'Enter your Bitbucket workspace, the first part of the URL after bitbucket.org/.');
+    if (first && !workspaces.includes(ws)) workspaces = [ws, ...workspaces];
+    if (pick !== agent) for (const m of [guides, guideDone, tours, tourDone, streamed]) m.clear(); // results belong to the agent that wrote them
+    agent = pick;
+    save('agent', agent);
+    save('preload', pre);
+    save('workspaces', workspaces);
+    dlg.close();
+    dlg.remove();
+    renderSide();
+    refresh();
+    if (current) select(current.slice(0, current.lastIndexOf('#')), +current.slice(current.lastIndexOf('#') + 1));
+  };
+  const render = () =>
+    set(
+      dlg,
+      h('h2', { textContent: first ? 'Welcome to Better Review' : 'Settings' }),
+      first && h('p', { className: 'muted', textContent: 'Two choices and you are ready to review.' }),
+      h('h3', { textContent: 'AI agent' }),
+      h('p', { className: 'muted', textContent: 'Writes the review guide and the tour. It runs through a CLI on this Mac, with your own account.' }),
+      AGENTS.map((x) =>
+        h(
+          'label',
+          { className: 'option' + (pick === x.id ? ' on' : '') },
+          h('input', {
+            type: 'radio',
+            name: 'agent',
+            checked: pick === x.id,
+            onchange: () => {
+              pick = x.id;
+              pre = pick === 'claude';
+              status.textContent = '';
+              render();
+            },
+          }),
+          h('div', {}, h('b', { textContent: x.name }), h('small', { textContent: x.note }), h('small', { className: found[x.id] ? 'plus' : 'minus', textContent: found[x.id] ? 'Installed' : `Not found. ${x.install}` })),
+        ),
+      ),
+      h('div', { className: 'row' }, h('button', { type: 'button', textContent: 'Test this agent', onclick: test }), status),
+      h('label', { className: 'check' }, h('input', { type: 'checkbox', checked: pre, onchange: (e) => (pre = e.target.checked) }), 'Prepare guides for all pull requests in the background'),
+      h('small', { textContent: 'One AI request per open pull request. If off, a guide is written when you open the pull request.' }),
+      first && [h('h3', { textContent: 'Bitbucket workspace' }), wsInput, found.twg === false && h('p', { className: 'error', textContent: 'The twg CLI was not found. Better Review needs it to read Bitbucket.' })],
+      problem,
+      h('div', { className: 'row end' }, !first && h('button', { type: 'button', textContent: 'Cancel', onclick: () => (dlg.close(), dlg.remove()) }), h('button', { type: 'button', className: 'primary', textContent: first ? 'Start reviewing' : 'Save', onclick: done })),
+    );
+  dlg.addEventListener('cancel', (e) => (first ? e.preventDefault() : dlg.remove()));
+  render();
+  document.body.append(dlg);
+  dlg.showModal();
+}
+window.__TAURI__.event?.listen('open-settings', () => openSettings(!agent));
+
 renderSide();
-refresh();
+if (agent) refresh();
+else openSettings(true);
