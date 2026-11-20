@@ -58,8 +58,8 @@ let inboxes = load('inboxes', {});
 // No preset workspace: the setup wizard asks for it. Installs from before the wizard keep the ones they had loaded.
 let workspaces = load('workspaces', Object.keys(inboxes));
 let agent = load('agent', null); // 'claude' | 'copilot', null until the wizard ran
-// Preloading costs one AI request per open PR. On by default for Claude, off for Copilot where each one is a premium request.
-const preloadOn = () => load('preload', agent === 'claude');
+// Preloading costs one AI request per open PR, so it is opt-in.
+const preloadOn = () => load('preload', false);
 const errors = {};
 let current = null;
 const prs = new Map(); // key -> Promise<{pr, files}>
@@ -644,7 +644,7 @@ async function openSettings(first) {
   if (document.querySelector('dialog.settings')) return;
   const found = await invoke('installed').catch(() => ({}));
   let pick = agent ?? (found.copilot && !found.claude ? 'copilot' : 'claude');
-  let pre = agent ? preloadOn() : pick === 'claude';
+  let pre = preloadOn();
   const status = h('small');
   const wsInput = h('input', { placeholder: 'e.g. my-company', value: workspaces[0] ?? '' });
   const problem = h('p', { className: 'error' });
@@ -693,7 +693,6 @@ async function openSettings(first) {
             checked: pick === x.id,
             onchange: () => {
               pick = x.id;
-              pre = pick === 'claude';
               status.textContent = '';
               render();
             },
