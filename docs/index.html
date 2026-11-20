@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Better Review: guided pull request reviews for Bitbucket</title>
+<meta name="description" content="A desktop app for macOS and Windows that groups the files of a Bitbucket pull request, explains what changed and walks you through it step by step.">
+<meta property="og:title" content="Better Review">
+<meta property="og:description" content="Guided pull request reviews for Bitbucket. Read a guide, follow a tour, approve.">
+<meta property="og:image" content="https://hohler.github.io/better-review/screenshots/hero.png">
+<style>
+  /* No web fonts and no scripts: the page makes no third-party requests. */
+  :root {
+    color-scheme: light dark;
+    --page: light-dark(#eeeff6, #111219);
+    --sheet: light-dark(#fbfbfe, #191a24);
+    --ink: light-dark(#1c1b3a, #e9e9f4);
+    --soft: light-dark(#5a5b78, #9fa0bd);
+    --rule: light-dark(#d5d6e6, #2c2d40);
+    --accent: light-dark(#4347c4, #8f93ff);
+    --on-accent: light-dark(#fff, #111219);
+    --add: light-dark(#d9f2e0, #12301e);
+    --add-ink: light-dark(#17693f, #63d39a);
+    --del: light-dark(#f9dede, #381a1d);
+    --del-ink: light-dark(#a3302c, #f08a86);
+    --mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --measure: 34rem;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 1.0625rem/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
+  a { color: var(--accent); text-underline-offset: 0.18em; }
+  a:focus-visible, .button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+  img { display: block; max-width: 100%; height: auto; }
+  code { font-family: var(--mono); font-size: 0.92em; }
+  .wrap { max-width: 76rem; margin: 0 auto; padding: 0 clamp(1rem, 4vw, 3rem); }
+
+  .masthead { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding-block: 1.5rem; }
+  .masthead strong { font-size: 1.125rem; letter-spacing: -0.01em; }
+  .masthead nav { display: flex; gap: 1.5rem; }
+
+  /* The headline is a diff: the old way of reviewing removed, the new way added. */
+  .diff { margin: clamp(1.5rem, 5vw, 4rem) 0 0; border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; background: var(--sheet); font: 600 clamp(1.05rem, 0.7rem + 1.9vw, 2.05rem)/1.35 var(--mono); letter-spacing: -0.02em; }
+  .diff span, .diff del, .diff ins { display: block; padding: 0.42em 1em 0.42em 3.1em; text-indent: -1.6em; text-decoration: none; }
+  .diff .hunk { color: var(--soft); font-weight: 400; font-size: 0.62em; padding-block: 0.9em; text-indent: 0; padding-left: 1.5em; border-bottom: 1px solid var(--rule); }
+  .diff del { background: var(--del); color: var(--del-ink); font-weight: 400; }
+  .diff ins { background: var(--add); color: var(--add-ink); }
+  .diff del::before, .diff ins::before { display: inline-block; width: 1.6em; text-indent: 0; }
+  .diff del::before { content: '-'; }
+  .diff ins::before { content: '+'; }
+
+  .lede { display: grid; grid-template-columns: minmax(0, var(--measure)) auto; gap: 2rem 4rem; align-items: start; justify-content: space-between; padding-block: clamp(2rem, 4vw, 3.5rem); }
+  .lede p { margin: 0; font-size: 1.25rem; line-height: 1.5; }
+  .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+  .button { display: inline-block; padding: 0.8rem 1.25rem; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 600; text-decoration: none; }
+  .button.quiet { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
+  .actions small { flex-basis: 100%; color: var(--soft); font-size: 0.875rem; }
+
+  .shot { display: block; border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; background: var(--sheet); }
+
+  /* The walkthrough borrows the app's own tour bar: one segment per stop, the current one lit. */
+  .stops { padding-block: clamp(3rem, 8vw, 7rem) 0; }
+  .stops > h2 { margin: 0 0 0.5rem; font-size: clamp(1.75rem, 1.2rem + 2vw, 2.75rem); line-height: 1.1; letter-spacing: -0.03em; max-width: 22ch; }
+  .stops > p { margin: 0; max-width: var(--measure); color: var(--soft); }
+  .stop { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 8fr); gap: 1.5rem clamp(1.5rem, 4vw, 4rem); align-items: start; padding-block: clamp(2.5rem, 6vw, 5rem); border-bottom: 1px solid var(--rule); }
+  .stop:last-child { border-bottom: 0; }
+  .bar { display: flex; align-items: center; gap: 6px; margin: 0 0 1.25rem; font-size: 0.875rem; color: var(--soft); }
+  .bar i { width: 2.25rem; height: 5px; border-radius: 3px; background: var(--rule); }
+  .bar i.done { background: var(--add-ink); }
+  .bar i.now { background: var(--accent); }
+  .bar span { margin-left: 0.5rem; }
+  .stop h3 { margin: 0 0 0.75rem; font-size: 1.625rem; line-height: 1.2; letter-spacing: -0.02em; }
+  .stop p { margin: 0 0 1rem; max-width: var(--measure); }
+  .stop .check { margin: 1.25rem 0 0; padding: 0.85rem 1rem; border-left: 3px solid var(--accent); background: var(--sheet); font-size: 0.9375rem; }
+
+  .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2rem clamp(1.5rem, 4vw, 4rem); padding-block: clamp(3rem, 7vw, 6rem); }
+  .facts h2 { grid-column: 1 / -1; margin: 0; font-size: clamp(1.75rem, 1.2rem + 2vw, 2.75rem); line-height: 1.1; letter-spacing: -0.03em; }
+  .facts h3 { margin: 0 0 0.5rem; font-size: 1.125rem; }
+  .facts p { margin: 0; color: var(--soft); }
+
+  .install { padding-block: clamp(2.5rem, 6vw, 4.5rem); border-top: 1px solid var(--rule); }
+  .install h2 { margin: 0 0 1.5rem; font-size: clamp(1.75rem, 1.2rem + 2vw, 2.75rem); line-height: 1.1; letter-spacing: -0.03em; }
+  .install ol { margin: 0 0 2rem; padding-left: 1.4rem; max-width: var(--measure); }
+  .install li { margin-bottom: 0.6rem; padding-left: 0.3rem; }
+
+  footer { padding-block: 2rem 3rem; color: var(--soft); font-size: 0.875rem; }
+
+  @media (max-width: 52rem) {
+    .lede, .stop { grid-template-columns: minmax(0, 1fr); }
+    .facts { grid-template-columns: minmax(0, 1fr); }
+    .diff span, .diff del, .diff ins { padding-left: 2.4em; padding-right: 0.7em; }
+    .diff .hunk { padding-left: 0.8em; }
+    .masthead nav { gap: 1rem; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead">
+    <strong>Better Review</strong>
+    <nav>
+      <a href="https://github.com/hohler/better-review">Source on GitHub</a>
+      <a href="#install">Install</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1 class="diff">
+      <span class="hunk">@@ reviewing a Bitbucket pull request @@</span>
+      <del>Open forty files and work out what this is about</del>
+      <del>Read the diff top to bottom, in alphabetical order</del>
+      <ins>Read a guide that groups the files and says what changed</ins>
+      <ins>Follow a tour in the order the change makes sense</ins>
+      <ins>Comment, approve, next</ins>
+    </h1>
+
+    <div class="lede">
+      <p>Better Review is a desktop app for the pull requests waiting for your review on Bitbucket Cloud. It explains each one before you read a line of code, using the AI agent you already have: Claude Code or GitHub Copilot.</p>
+      <div class="actions">
+        <a class="button" href="https://github.com/hohler/better-review/releases/latest">Download for macOS</a>
+        <a class="button quiet" href="https://github.com/hohler/better-review/releases/latest">Download for Windows</a>
+        <small>Apple silicon and 64-bit Windows. Both downloads are on the release page.</small>
+      </div>
+    </div>
+
+    <picture class="shot">
+      <source srcset="screenshots/guide-dark.png" media="(prefers-color-scheme: dark)">
+      <img src="screenshots/guide-light.png" width="2880" height="1800" alt="The guide view: on the left the pull requests to review, in the middle a group of files with a short explanation, on the right the diff with a comment thread.">
+    </picture>
+
+    <section class="stops">
+      <h2>One review, four stops</h2>
+      <p>This is how a pull request goes through the app. The screenshots show an invented pull request, not real code.</p>
+
+      <article class="stop">
+        <div>
+          <p class="bar"><i class="now"></i><i></i><i></i><i></i><span>Stop 1 of 4</span></p>
+          <h3>Start with the guide</h3>
+          <p>The guide sorts the changed files into groups by topic, core change first, tests and configuration last. Each group gets two or three sentences: what changes, why, and what to watch for.</p>
+          <p>Lockfiles, snapshots and other generated files are set aside and stay collapsed. So do tests, until you want them.</p>
+        </div>
+        <picture class="shot">
+          <source srcset="screenshots/web-guide-dark.png" media="(prefers-color-scheme: dark)">
+          <img src="screenshots/web-guide-light.png" width="2560" height="1640" loading="lazy" alt="A guide group titled Gift card model and redemption rule, with its explanation and the file it covers.">
+        </picture>
+      </article>
+
+      <article class="stop">
+        <div>
+          <p class="bar"><i class="done"></i><i class="now"></i><i></i><i></i><span>Stop 2 of 4</span></p>
+          <h3>Take the tour when the change is big</h3>
+          <p>The tour walks you through the change the way a colleague would at your desk. It starts where the change begins and follows it to its callers, one stop at a time. A stop can span several files.</p>
+          <p>Every stop says what the code does and names one thing to check. Every changed line appears in exactly one stop, so nothing is skipped.</p>
+        </div>
+        <picture class="shot">
+          <source srcset="screenshots/web-tour-dark.png" media="(prefers-color-scheme: dark)">
+          <img src="screenshots/web-tour-light.png" width="2560" height="1640" loading="lazy" alt="A tour stop with a progress bar, an explanation, a highlighted check and the code it refers to.">
+        </picture>
+      </article>
+
+      <article class="stop">
+        <div>
+          <p class="bar"><i class="done"></i><i class="done"></i><i class="now"></i><i></i><span>Stop 3 of 4</span></p>
+          <h3>Comment where you read</h3>
+          <p>Click a line number to comment on it, reply in a thread, edit or delete what you wrote. Post a comment right away or add it to your pending review.</p>
+          <p>The plain diff is always one tab away, with syntax highlighting, expandable unchanged lines and a find bar.</p>
+        </div>
+        <picture class="shot">
+          <source srcset="screenshots/web-diff-dark.png" media="(prefers-color-scheme: dark)">
+          <img src="screenshots/web-diff-light.png" width="2560" height="1640" loading="lazy" alt="A diff with a comment thread between two lines, including a reply that contains a code block.">
+        </picture>
+      </article>
+
+      <article class="stop">
+        <div>
+          <p class="bar"><i class="done"></i><i class="done"></i><i class="done"></i><i class="now"></i><span>Stop 4 of 4</span></p>
+          <h3>Approve, or ask for changes</h3>
+          <p>Approve and request changes sit at the top of every pull request. The sidebar keeps the ones still waiting for you apart from the ones you approved, and marks where you asked for changes.</p>
+          <p class="check">You choose the agent and the model for the guide and for the tour. Nothing is generated until you open a pull request, so no AI credits are spent by accident.</p>
+        </div>
+        <picture class="shot">
+          <source srcset="screenshots/web-overview-dark.png" media="(prefers-color-scheme: dark)">
+          <img src="screenshots/web-overview-light.png" width="2560" height="1640" loading="lazy" alt="The overview of a pull request with its description, the discussion, and the buttons to request changes or approve at the top.">
+        </picture>
+      </article>
+    </section>
+
+    <section class="facts">
+      <h2>What it runs on</h2>
+      <div>
+        <h3>Your own accounts</h3>
+        <p>The app has no server and no login of its own. It reads Bitbucket through the <code>twg</code> command line tool and writes guides through <code>claude</code> or <code>copilot</code>, each signed in as you.</p>
+      </div>
+      <div>
+        <h3>An agent with no tools</h3>
+        <p>The agent only gets the diff and returns text. Its tools are switched off, and the pull request is treated as data, not as instructions.</p>
+      </div>
+      <div>
+        <h3>Written once per commit</h3>
+        <p>Guides and tours are cached on your machine. Reopening one costs nothing. A new commit on the pull request gets a new guide.</p>
+      </div>
+    </section>
+
+    <section class="install" id="install">
+      <h2>Install</h2>
+      <ol>
+        <li>Install <code>twg</code> and sign in to your Bitbucket workspace.</li>
+        <li>Install Claude Code or the GitHub Copilot CLI and sign in.</li>
+        <li>Download Better Review and open it. A short setup asks for your agent and your workspace.</li>
+      </ol>
+      <div class="actions">
+        <a class="button" href="https://github.com/hohler/better-review/releases/latest">Open the release page</a>
+        <a class="button quiet" href="https://github.com/hohler/better-review#readme">Read the instructions</a>
+        <small>The builds are not signed, so macOS and Windows ask for confirmation on first start. The instructions show how. The Windows build is new and has seen little testing.</small>
+      </div>
+    </section>
+  </main>
+
+  <footer>Better Review is not affiliated with Atlassian, Anthropic or GitHub.</footer>
+</div>
+</body>
+</html>

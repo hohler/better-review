@@ -2,6 +2,8 @@
 
 Guided pull request reviews for Bitbucket, as a desktop app for macOS and Windows (Tauri).
 
+Website: https://hohler.github.io/better-review/
+
 ![Better Review showing the guide for a pull request](docs/screenshots/hero.png)
 
 | Guide | Tour |
@@ -10,7 +12,7 @@ Guided pull request reviews for Bitbucket, as a desktop app for macOS and Window
 | **Diff and comments** | **Settings** |
 | ![Diff with an inline comment thread](docs/screenshots/diff-light.png) | ![Settings: agent and model per guide and tour](docs/screenshots/settings-dark.png) |
 
-The screenshots show invented data (`docs/demo`). To redo them, serve the repository root on port 4718 and run `docs/demo/capture.sh`.
+The screenshots show invented data (`docs/demo`). The website is `docs/index.html`, served by GitHub Pages from the `docs` folder. To redo them, serve the repository root on port 4718 and run `docs/demo/capture.sh`.
 
 ## Requirements
 
