@@ -699,6 +699,80 @@ grip.ondblclick = () => {
   save('sideWidth', 290);
 };
 
+// Find in page (Cmd+F): WKWebView has no built-in find bar, so matches are marked with the CSS Custom Highlight API.
+// It searches what is rendered: collapsed files and diffs still behind "Show diff" are not included.
+const find = { bar: null, ranges: [], i: 0 };
+function findRun(query, step = 0) {
+  const stale = find.ranges[0] && !find.ranges[0].startContainer.isConnected; // the page was redrawn since the last search
+  if (step === 0 || stale) {
+    find.ranges = [];
+    if (step === 0) find.i = 0;
+    // Syntax highlighting splits a line into many text nodes, so search one joined string and map hits back to nodes.
+    // A line break is inserted between blocks, so a match never runs from one line into the next.
+    const q = query.toLowerCase();
+    const nodes = []; // [start offset in text, node]
+    let text = '';
+    let block = null;
+    const walker = document.createTreeWalker(main, NodeFilter.SHOW_TEXT);
+    for (let node; q && (node = walker.nextNode()); ) {
+      if (node.parentElement.closest('[hidden], textarea')) continue;
+      const b = node.parentElement.closest('td, p, li, pre, h1, h2, h3, header, small, .frow, .text, button');
+      if (b !== block) text += '\n';
+      block = b;
+      nodes.push([text.length, node]);
+      text += node.data.toLowerCase();
+    }
+    const locate = (pos) => {
+      let lo = 0;
+      for (let hi = nodes.length - 1; lo < hi; ) {
+        const mid = (lo + hi + 1) >> 1;
+        if (nodes[mid][0] <= pos) lo = mid;
+        else hi = mid - 1;
+      }
+      return [nodes[lo][1], pos - nodes[lo][0]];
+    };
+    for (let at = text.indexOf(q); q && at !== -1 && find.ranges.length < 5000; at = text.indexOf(q, at + q.length)) {
+      const r = new Range();
+      r.setStart(...locate(at));
+      const [endNode, endOffset] = locate(at + q.length - 1); // the node holding the last matched character
+      r.setEnd(endNode, endOffset + 1);
+      find.ranges.push(r);
+    }
+  }
+  const n = find.ranges.length;
+  find.i = n ? (Math.min(find.i, n - 1) + step + n) % n : 0;
+  CSS.highlights.set('find', new Highlight(...find.ranges));
+  CSS.highlights.set('find-current', new Highlight(...(n ? [find.ranges[find.i]] : [])));
+  if (n) find.ranges[find.i].startContainer.parentElement.scrollIntoView({ block: 'center' });
+  find.bar.querySelector('small').textContent = !query ? '' : n ? `${find.i + 1} of ${n}${n === 5000 ? '+' : ''}` : 'No matches';
+}
+function findOpen() {
+  if (!find.bar) {
+    const input = h('input', { placeholder: 'Find in page', oninput: () => findRun(input.value) });
+    const close = () => {
+      find.bar.hidden = true;
+      CSS.highlights.delete('find');
+      CSS.highlights.delete('find-current');
+    };
+    input.onkeydown = (e) => {
+      if (e.key === 'Enter') findRun(input.value, e.shiftKey ? -1 : 1);
+      if (e.key === 'Escape') close();
+    };
+    find.bar = h('div', { className: 'findbar' }, input, h('small'), h('button', { textContent: '↑', title: 'Previous (Shift+Enter)', onclick: () => findRun(input.value, -1) }), h('button', { textContent: '↓', title: 'Next (Enter)', onclick: () => findRun(input.value, 1) }), h('button', { textContent: '×', title: 'Close (Esc)', onclick: close }));
+    document.body.append(find.bar);
+  }
+  const input = find.bar.querySelector('input');
+  find.bar.hidden = false;
+  input.focus();
+  input.select();
+  if (input.value) findRun(input.value);
+}
+document.addEventListener('keydown', (e) => {
+  if (!e.metaKey || document.querySelector('dialog[open]')) return;
+  if (e.key === 'f') e.preventDefault(), findOpen();
+  else if (e.key === 'g' && find.bar && !find.bar.hidden) e.preventDefault(), findRun(find.bar.querySelector('input').value, e.shiftKey ? -1 : 1);
+});
+
 const AGENTS = [
   { id: 'claude', name: 'Claude Code', note: 'Sonnet writes the guide, Opus the tour.', install: 'Install the claude CLI and log in.' },
   { id: 'copilot', name: 'GitHub Copilot', note: 'Copilot picks the model your plan allows. Each guide or tour is one premium request.', install: 'Install the copilot CLI and run "copilot login".' },

@@ -189,3 +189,11 @@ dialog.settings input:not([type]) { width: 100%; padding: 6px 10px; border: 1px 
 form.comment textarea { font-family: var(--mono); font-size: 12px; line-height: 1.5; min-height: 96px; tab-size: 2; }
 form.comment .preview { display: block; min-height: 96px; padding: 6px 10px; margin: 0; border: 1px solid var(--line); border-radius: 6px; }
 form.comment .preview[hidden] { display: none; }
+
+.findbar { position: fixed; top: 60px; right: 28px; z-index: 6; display: flex; gap: 6px; align-items: center; padding: 6px 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgb(0 0 0 / .16); }
+.findbar[hidden] { display: none; }
+.findbar input { width: 220px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--page); }
+.findbar small { min-width: 64px; text-align: right; white-space: nowrap; }
+.findbar button { padding: 2px 8px; }
+::highlight(find) { background: #ffe58a; color: #1b1c1f; }
+::highlight(find-current) { background: #ff9632; color: #1b1c1f; }
