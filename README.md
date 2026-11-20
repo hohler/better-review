@@ -23,4 +23,25 @@ npm test        # diff parser and guide checks
 - `ui/lib.js`: diff parser, generated/test file detection, guide normalization
 - `ui/app.js`: the interface. Workspaces and "Reviewed" marks live in the webview's localStorage.
 
-The app is unsigned. On another Mac, build it there or allow it once in System Settings.
+## Opening the unsigned app
+
+The release build is not signed or notarized by Apple, so macOS blocks it the first time. You only have to allow it once.
+
+1. Unzip the download and move `Better Review.app` to your Applications folder.
+2. Double-click the app. macOS shows a warning that it cannot verify the app. Click **Done** (not "Move to Trash").
+3. Open **System Settings** and go to **Privacy & Security**.
+4. Scroll down to the **Security** section. You will see: "Better Review" was blocked to protect your Mac.
+5. Click **Open Anyway** next to it. The button only appears for about an hour after step 2, so repeat step 2 if it is missing.
+6. Confirm with Touch ID or your password, then click **Open Anyway** in the dialog that follows.
+
+From then on the app opens normally.
+
+### Alternative: Terminal
+
+If you prefer, or if macOS says the app "is damaged and can't be opened", remove the download quarantine flag instead:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Better Review.app"
+```
+
+On a managed Mac your organization may disable "Open Anyway". In that case build the app locally (see Build), which needs no approval.
