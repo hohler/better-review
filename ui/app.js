@@ -280,7 +280,8 @@ function fileEl(f, hidden, ctx) {
       h('span', { className: 'dir', textContent: f.status === 'renamed' ? `${dir} (was ${f.oldPath})` : dir }),
       roots.length > 0 && h('span', { className: 'tag', textContent: `${roots.length} comment${roots.length > 1 ? 's' : ''}` }),
       h('span', { className: 'stats' }, stats(f)),
-      check(done, () => toggle([f.path], !done)),
+      // Marking a file whose top is already scrolled out of view collapses it, so jump to the next file.
+      check(done, () => toggle([f.path], !done, !done && card.getBoundingClientRect().top < main.getBoundingClientRect().top && card.id)),
     ),
     body,
   );
@@ -344,10 +345,14 @@ function draw(repo, id, data, guide) {
   // Reviewed marks live per commit, so a new push asks for a fresh look.
   const rkey = `reviewed:${repo}#${id}:${pr.source.commit.hash}`;
   const reviewed = new Set(load(rkey, []));
-  const toggle = (paths, on) => {
+  const toggle = (paths, on, nextAfter) => {
     for (const p of paths) on ? reviewed.add(p) : reviewed.delete(p);
     save(rkey, [...reviewed]);
     redraw();
+    if (!nextAfter) return;
+    const cards = [...main.querySelectorAll('.file')];
+    const i = cards.findIndex((c) => c.id === nextAfter);
+    (cards[i + 1] ?? cards[i]).scrollIntoView({ block: 'start' });
   };
   const post = async (args) => {
     await invoke('comment', { repo, id, ...args });
