@@ -129,3 +129,7 @@ form.comment div { display: flex; gap: 6px; margin-top: 4px; }
 .file > header:hover .chev { visibility: visible; }
 .file:has(> .body[hidden]) .chev, .file:has(.placeholder) .chev { transform: none; }
 .frow { align-items: center; }
+tr.gap { cursor: pointer; }
+tr.gap:hover td { color: var(--text); background: var(--page); }
+td.no.plain { cursor: default; }
+td.no.plain:hover { color: var(--muted); }

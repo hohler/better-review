@@ -89,6 +89,23 @@ async fn diff(repo: String, id: u64, hash: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn file(repo: String, path: String, hash: String) -> Result<String, String> {
+    slug(&repo, true)?;
+    slug(&hash, false)?;
+    if path.starts_with('-') {
+        return Err(format!("Invalid path: {path}"));
+    }
+    bg(move || {
+        cached(&format!("file-{repo}-{hash}-{path}"), || {
+            let out = run("twg", &["bb", "repo", "file", &path, "--repo", &repo, "--ref", &hash, "-o", "json"], None)?;
+            let v: serde_json::Value = serde_json::from_str(&out).map_err(|e| format!("twg: {e}"))?;
+            v.get("content").and_then(|c| c.as_str()).map(str::to_owned).ok_or_else(|| "twg returned no file content".to_string())
+        })
+    })
+    .await
+}
+
+#[tauri::command]
 async fn guide(key: String, input: String) -> Result<String, String> {
     bg(move || {
         cached(&format!("guide-{key}"), || {
@@ -145,7 +162,7 @@ fn open_url(url: String) -> Result<(), String> {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![inbox, pr, diff, guide, comment, review, open_url])
+        .invoke_handler(tauri::generate_handler![inbox, pr, diff, file, guide, comment, review, open_url])
         .run(tauri::generate_context!())
         .expect("failed to start Better Review");
 }

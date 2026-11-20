@@ -36,6 +36,7 @@ const prs = new Map(); // key -> Promise<{pr, files}>
 const guides = new Map(); // key -> Promise<guide>
 const guideDone = new Map(); // key -> guide
 let tab = 'guide';
+const fileCache = new Map(); // repo@hash:path -> Promise<lines>
 
 const myUuid = () => Object.values(inboxes).map((i) => i.currentUser?.uuid).find(Boolean);
 
@@ -296,10 +297,26 @@ function fileEl(f, hidden, ctx) {
     const placed = new Set();
     const note = (...kids) => h('tr', { className: 'note' }, h('td', { colSpan: 2 }, kids));
     const tbody = h('tbody');
+    // A gap row loads the file at the PR's commit on click and swaps itself for lines from..to (to = null: end of file).
+    const expander = (from, to, label) => {
+      const cell = h('td', { colSpan: 2, textContent: label, title: 'Show unchanged lines' });
+      const tr = h('tr', { className: 'gap' }, cell);
+      tr.onclick = async () => {
+        cell.textContent = 'Loading…';
+        try {
+          const all = await ctx.fileLines(f.path);
+          // Line numbers are not clickable here: Bitbucket only takes inline comments on lines inside the diff.
+          tr.replaceWith(...all.slice(from - 1, to ?? all.length).map((text, i) => h('tr', {}, h('td', { className: 'no plain', textContent: from + i }), highlight(h('td', { className: 'code' }), text, lang))));
+        } catch (e) {
+          cell.textContent = `Could not load the file: ${e}`;
+        }
+      };
+      return tr;
+    };
     let end = 0; // last new-side line of the previous hunk
     for (const hunk of f.hunks) {
       const gap = hunk.start - end - 1;
-      if (gap > 0) tbody.append(h('tr', { className: 'gap' }, h('td', { colSpan: 2, textContent: `↕ ${gap} unchanged line${gap > 1 ? 's' : ''}` })));
+      if (gap > 0) tbody.append(expander(end + 1, hunk.start - 1, `↕ ${gap} unchanged line${gap > 1 ? 's' : ''}`));
       end = hunk.start + hunk.count - 1;
       for (const l of hunk.lines) {
         const row = h('tr', { className: l.t === '+' ? 'add' : l.t === '-' ? 'del' : '' });
@@ -317,6 +334,7 @@ function fileEl(f, hidden, ctx) {
         if (here.length) tbody.append(note(here.map((c) => (placed.add(c), threadEl(c, comments, post)))));
       }
     }
+    if (f.hunks.length && f.status !== 'added' && f.status !== 'deleted') tbody.append(expander(end + 1, null, '↕ Show unchanged lines below'));
     const outdated = roots.filter((c) => !placed.has(c));
     if (outdated.length) tbody.prepend(note(h('small', { textContent: 'Comments outside the current diff' }), outdated.map((c) => threadEl(c, comments, post))));
     set(body, h('div', { className: 'scroll' }, h('table', { className: 'diff' }, tbody)));
@@ -368,7 +386,17 @@ function draw(repo, id, data, guide) {
       alert(ex);
     }
   };
-  const ctx = { comments, post, reviewed, toggle };
+  const fileLines = (path) => {
+    const src = pr.source.repository?.full_name ?? repo; // forks keep the source commit in their own repo
+    const k = `${src}@${pr.source.commit.hash}:${path}`;
+    if (!fileCache.has(k)) {
+      const p = invoke('file', { repo: src, path, hash: pr.source.commit.hash }).then((t) => t.replace(/\n$/, '').split('\n'));
+      p.catch(() => fileCache.delete(k));
+      fileCache.set(k, p);
+    }
+    return fileCache.get(k);
+  };
+  const ctx = { comments, post, reviewed, toggle, fileLines };
   const generated = new Set(g.generated);
   const why = (p) => (generated.has(p) ? 'Generated files' : TEST.test(p) ? 'Test files' : byPath[p].added + byPath[p].removed > 1500 ? 'Large diffs' : null);
   const card = (p) => fileEl(byPath[p], why(p), ctx);
