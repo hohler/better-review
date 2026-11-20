@@ -1,4 +1,4 @@
-import { TEST, segments, parseDiff, normalizeGuide, guideInput } from './lib.js';
+import { TEST, segments, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './lib.js';
 
 const { invoke } = window.__TAURI__.core;
 const side = document.getElementById('side');
@@ -37,6 +37,15 @@ const guides = new Map(); // key -> Promise<guide>
 const guideDone = new Map(); // key -> guide
 let tab = 'guide';
 const fileCache = new Map(); // repo@hash:path -> Promise<lines>
+const tours = new Map(); // key -> Promise<tour>
+const tourDone = new Map(); // key -> tour
+let tourNav = null; // set while a tour stop is on screen: (delta) => move
+
+document.addEventListener('keydown', (e) => {
+  if (!tourNav || e.metaKey || e.ctrlKey || e.altKey || /INPUT|TEXTAREA/.test(document.activeElement?.tagName)) return;
+  if (e.key === 'ArrowRight') tourNav(1);
+  else if (e.key === 'ArrowLeft') tourNav(-1);
+});
 
 const myUuid = () => Object.values(inboxes).map((i) => i.currentUser?.uuid).find(Boolean);
 
@@ -79,6 +88,22 @@ function loadGuide(repo, id) {
     guides.set(k, p);
   }
   return guides.get(k);
+}
+
+// Tours are generated on first open of the Tour tab, not preloaded: they cost more than a guide.
+function loadTour(repo, id) {
+  const k = key(repo, id);
+  if (!tours.has(k)) {
+    const p = loadPr(repo, id).then(async ({ pr, files }) => {
+      const raw = await invoke('tour', { key: `${repo}-${id}-${pr.source.commit.hash}`, input: tourInput(pr, files) });
+      const tour = normalizeTour(JSON.parse(raw), files);
+      tourDone.set(k, tour);
+      return tour;
+    });
+    p.catch(() => tours.delete(k));
+    tours.set(k, p);
+  }
+  return tours.get(k);
 }
 
 async function refresh() {
@@ -257,11 +282,12 @@ const icon = (name) => {
 };
 
 // hidden: null (show diff) or the reason shown in the placeholder, e.g. "Test files".
-function fileEl(f, hidden, ctx) {
+// only: optional Set of hunks, to show just a part of the file (tour stops).
+function fileEl(f, hidden, ctx, only) {
   const { comments, post, reviewed, toggle } = ctx;
   const roots = comments.filter((c) => !c.parent && c.inline?.path === f.path);
   const [name, dir] = split(f.path);
-  const done = reviewed.has(f.path);
+  const done = !ctx.tour && reviewed.has(f.path);
   const body = h('div', { className: 'body' });
   const card = h(
     'div',
@@ -282,7 +308,8 @@ function fileEl(f, hidden, ctx) {
       roots.length > 0 && h('span', { className: 'tag', textContent: `${roots.length} comment${roots.length > 1 ? 's' : ''}` }),
       h('span', { className: 'stats' }, stats(f)),
       // Marking a file whose top is already scrolled out of view collapses it, so jump to the next file.
-      check(done, () => toggle([f.path], !done, !done && card.getBoundingClientRect().top < main.getBoundingClientRect().top && card.id)),
+      only && only.size < f.hunks.length && h('span', { className: 'tag', textContent: `${only.size} of ${f.hunks.length} hunks` }),
+      !ctx.tour && check(done, () => toggle([f.path], !done, !done && card.getBoundingClientRect().top < main.getBoundingClientRect().top && card.id)),
     ),
     body,
   );
@@ -314,10 +341,16 @@ function fileEl(f, hidden, ctx) {
       return tr;
     };
     let end = 0; // last new-side line of the previous hunk
+    let skipped = false; // a hunk outside this tour stop lies in the gap before the next shown hunk
     for (const hunk of f.hunks) {
+      if (only && !only.has(hunk)) {
+        skipped = true;
+        continue;
+      }
       const gap = hunk.start - end - 1;
-      if (gap > 0) tbody.append(expander(end + 1, hunk.start - 1, `↕ ${gap} unchanged line${gap > 1 ? 's' : ''}`));
+      if (gap > 0) tbody.append(expander(end + 1, hunk.start - 1, skipped ? `↕ ${gap} line${gap > 1 ? 's' : ''} not in this stop` : `↕ ${gap} unchanged line${gap > 1 ? 's' : ''}`));
       end = hunk.start + hunk.count - 1;
+      skipped = false;
       for (const l of hunk.lines) {
         const row = h('tr', { className: l.t === '+' ? 'add' : l.t === '-' ? 'del' : '' });
         const anchor = l.t === '-' ? { fromLine: l.o } : { line: l.n };
@@ -334,9 +367,9 @@ function fileEl(f, hidden, ctx) {
         if (here.length) tbody.append(note(here.map((c) => (placed.add(c), threadEl(c, comments, post)))));
       }
     }
-    if (f.hunks.length && f.status !== 'added' && f.status !== 'deleted') tbody.append(expander(end + 1, null, '↕ Show unchanged lines below'));
+    if (f.hunks.length && f.status !== 'added' && f.status !== 'deleted') tbody.append(expander(end + 1, null, only ? '↕ Show the rest of the file' : '↕ Show unchanged lines below'));
     const outdated = roots.filter((c) => !placed.has(c));
-    if (outdated.length) tbody.prepend(note(h('small', { textContent: 'Comments outside the current diff' }), outdated.map((c) => threadEl(c, comments, post))));
+    if (outdated.length && !only) tbody.prepend(note(h('small', { textContent: 'Comments outside the current diff' }), outdated.map((c) => threadEl(c, comments, post))));
     set(body, h('div', { className: 'scroll' }, h('table', { className: 'diff' }, tbody)));
   };
   card.show = show;
@@ -348,6 +381,7 @@ function fileEl(f, hidden, ctx) {
 
 function draw(repo, id, data, guide) {
   const { pr, files } = data;
+  tourNav = null;
   const g = guide ?? normalizeGuide(null, files);
   const byPath = Object.fromEntries(files.map((f) => [f.path, f]));
   const comments = (pr._comments ?? []).filter((c) => !c.deleted);
@@ -425,6 +459,83 @@ function draw(repo, id, data, guide) {
       h('div', { className: 'cards' }, grp.files.map(card)),
     );
   };
+  const tourView = () => {
+    const k = key(repo, id);
+    const t = tourDone.get(k);
+    if (!t) {
+      const box = h('div', { className: 'tour' }, h('p', { className: 'muted', textContent: 'Preparing the tour. For a large pull request this can take up to a minute…' }));
+      loadTour(repo, id).then(
+        () => current === k && tab === 'tour' && box.isConnected && draw(repo, id, data, guide),
+        (e) => box.isConnected && set(box, h('p', { className: 'error', textContent: `Tour failed: ${e}` }), h('button', { textContent: 'Try again', onclick: () => draw(repo, id, data, guide) })),
+      );
+      return box;
+    }
+    // Position 0 is the briefing, 1..n are the stops, n+1 is the wrap-up.
+    const tkey = `tour:${repo}#${id}:${pr.source.commit.hash}`;
+    const state = load(tkey, { i: 0, done: [] });
+    const last = t.stops.length + 1;
+    const i = Math.min(state.i, last);
+    const done = new Set(state.done);
+    const stopFiles = (s) => [...s.parts.map((p) => p.path), ...s.files];
+    const go = (n, mark) => {
+      if (mark && i > 0 && i < last) {
+        done.add(i);
+        // A file counts as reviewed once every stop showing a part of it has been passed.
+        for (const p of stopFiles(t.stops[i - 1])) if (t.stops.every((s, j) => !stopFiles(s).includes(p) || done.has(j + 1))) reviewed.add(p);
+        save(rkey, [...reviewed]);
+      }
+      save(tkey, { i: Math.max(0, Math.min(n, last)), done: [...done] });
+      draw(repo, id, data, guide);
+    };
+    tourNav = (d) => go(i + d, d > 0);
+    const tctx = { ...ctx, tour: true };
+    const s = t.stops[i - 1];
+    const body =
+      i === 0
+        ? [
+            h('h2', { textContent: 'Briefing' }),
+            rich(t.briefing || 'No briefing available.', 'lead text'),
+            h('h3', { textContent: 'Route' }),
+            h('ol', { className: 'route' }, t.stops.map((x, j) => h('li', { className: done.has(j + 1) ? 'done' : '' }, h('a', { textContent: x.title, onclick: () => go(j + 1) }), h('small', { textContent: ` ${stopFiles(x).length} file${stopFiles(x).length > 1 ? 's' : ''}` })))),
+          ]
+        : i === last
+          ? [
+              h('h2', { textContent: 'Wrap-up' }),
+              h('p', { className: 'lead', textContent: done.size >= t.stops.length ? `You have been through all ${t.stops.length} stops.` : `You have been through ${done.size} of ${t.stops.length} stops. Skipped stops are marked in the bar above.` }),
+              t.questions.length > 0 && [h('h3', { textContent: 'Worth raising with the author' }), h('ul', {}, t.questions.map((q) => h('li', {}, rich(q))))],
+              h('h3', { textContent: 'Leave a general comment' }),
+              commentForm((text) => post({ text })),
+              h('div', { className: 'verdict' }, h('button', { className: changes ? 'on warn' : '', textContent: changes ? '✗ Changes requested' : 'Request changes', onclick: act(changes ? 'remove-request-changes' : 'request-changes') }), h('button', { className: mine?.approved ? 'on' : 'primary', textContent: mine?.approved ? '✓ Approved' : 'Approve', onclick: act(mine?.approved ? 'unapprove' : 'approve') })),
+            ]
+          : [
+              h('h2', { textContent: s.title }),
+              rich(s.explanation, 'lead text'),
+              s.check && h('div', { className: 'checkbox' }, h('b', { textContent: 'Check ' }), rich(s.check)),
+              h('div', { className: 'cards' }, s.parts.map((p) => fileEl(byPath[p.path], null, tctx, new Set(p.hunks))), s.files.map((p) => fileEl(byPath[p], why(p), tctx))),
+            ];
+    return h(
+      'div',
+      { className: 'tour' },
+      h(
+        'div',
+        { className: 'progress' },
+        Array.from({ length: last + 1 }, (_, j) => h('a', { className: (j === i ? 'now ' : '') + (done.has(j) || j === 0 ? 'done' : ''), title: j === 0 ? 'Briefing' : j === last ? 'Wrap-up' : t.stops[j - 1].title, onclick: () => go(j) })),
+        h('span', { textContent: i === 0 ? 'Briefing' : i === last ? 'Wrap-up' : `Stop ${i} of ${t.stops.length}` }),
+      ),
+      body,
+      h(
+        'div',
+        { className: 'tournav' },
+        i > 0 && h('button', { textContent: '← Back', onclick: () => go(i - 1) }),
+        h('span', { className: 'grow' }),
+        h('small', { textContent: 'Arrow keys work too' }),
+        i > 0 && i < last && h('button', { textContent: 'Skip', onclick: () => go(i + 1) }),
+        i < last && h('button', { className: 'primary', textContent: i === 0 ? 'Start the tour →' : 'Looks good, next →', onclick: () => go(i + 1, true) }),
+      ),
+    );
+  };
+  // Issue keys like TVP-27172 in the title link to the Jira site named after the Bitbucket workspace.
+  const title = pr.title.split(/\b([A-Z][A-Z0-9]+-\d+)\b/).map((part, n) => (n % 2 ? h('a', { textContent: part, title: 'Open in Jira', onclick: () => invoke('open_url', { url: `https://${repo.split('/')[0]}.atlassian.net/browse/${part}` }) }) : part));
   const views = {
     overview: () => [
       guide && rich(g.summary, 'lead text'),
@@ -432,6 +543,7 @@ function draw(repo, id, data, guide) {
       h('div', { className: 'box' }, h('h3', { textContent: `Discussion (${general.length})` }), general.map((c) => threadEl(c, comments, post)), commentForm((text) => post({ text }))),
     ],
     guide: () => steps.map(step),
+    tour: tourView,
     diff: () => h('div', { className: 'cards' }, files.map((f) => card(f.path))),
   };
 
@@ -446,7 +558,7 @@ function draw(repo, id, data, guide) {
       h('button', { className: changes ? 'on warn' : '', textContent: changes ? '✗ Changes requested' : 'Request changes', onclick: act(changes ? 'remove-request-changes' : 'request-changes') }),
       h('button', { className: mine?.approved ? 'on' : 'primary', textContent: mine?.approved ? '✓ Approved' : 'Approve', onclick: act(mine?.approved ? 'unapprove' : 'approve') }),
     ),
-    h('h1', { textContent: pr.title }),
+    h('h1', {}, title),
     h('p', { className: 'meta' }, h('span', { textContent: `${pr.author?.display_name ?? '?'} · ` }), h('code', { textContent: `${pr.destination.branch.name} ← ${pr.source.branch.name}` }), h('span', { textContent: ` · ${repo} #${id} · ${files.length} files · ${reviewed.size} reviewed · updated ${ago(pr.updated_on)}` })),
     !guide && h('div', { className: 'guide' }, h('p', { className: 'muted', textContent: 'Generating review guide…' })),
     views[tab](),

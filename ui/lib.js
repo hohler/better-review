@@ -89,3 +89,49 @@ export function segments(raw) {
   inline(raw.slice(last).replace(/^\n/, ''));
   return out;
 }
+
+// Tour: every hunk of a regular source file gets an id (H1, H2, ...) that the LLM uses to build its stops.
+const isCore = (f) => !GENERATED.test(f.path) && !TEST.test(f.path);
+export function tourHunks(files) {
+  let n = 0;
+  return files.filter(isCore).flatMap((f) => f.hunks.map((hunk) => ({ id: `H${++n}`, path: f.path, hunk })));
+}
+
+export function tourInput(pr, files, max = 150000) {
+  const tests = files.filter((f) => TEST.test(f.path) && !GENERATED.test(f.path)).map((f) => f.path);
+  let out = `Title: ${pr.title}\n\nDescription:\n${pr.description || '-'}\n\nChanged test files (content not shown):\n${tests.join('\n') || '-'}\n\nHunks:\n`;
+  let path = null;
+  for (const { id, path: p, hunk } of tourHunks(files)) {
+    const chunk = `${p !== path ? `\n### ${p}\n` : ''}${id} ${hunk.header}\n${hunk.lines.map((l) => l.t + l.text).join('\n')}\n`;
+    // ponytail: hunks past the size cap are not sent, the coverage check then puts them in "Not covered by the tour".
+    if (out.length + chunk.length > max) break;
+    out += chunk;
+    path = p;
+  }
+  return out;
+}
+
+// Coverage guarantee: every hunk and every file ends up in exactly one stop, whatever the LLM returned.
+export function normalizeTour(raw, files) {
+  const all = tourHunks(files);
+  const byId = new Map(all.map((h) => [h.id, h]));
+  const seen = new Set();
+  const parts = (hs) => {
+    const m = new Map();
+    for (const h of hs) m.set(h.path, [...(m.get(h.path) ?? []), h.hunk]);
+    return [...m].map(([path, hunks]) => ({ path, hunks: hunks.sort((a, b) => a.start - b.start) }));
+  };
+  const stops = [];
+  for (const s of raw?.stops ?? []) {
+    const hs = (s.hunks ?? []).map((id) => byId.get(id)).filter((h) => h && !seen.has(h.id) && seen.add(h.id));
+    if (hs.length) stops.push({ title: s.title, explanation: s.explanation ?? '', check: s.check ?? '', parts: parts(hs), files: [] });
+  }
+  const missed = all.filter((h) => !seen.has(h.id));
+  const bare = files.filter((f) => isCore(f) && !f.hunks.length).map((f) => f.path); // binary or rename-only
+  if (missed.length || bare.length) stops.push({ title: 'Not covered by the tour', explanation: 'These changes were not placed in a stop. Review them here so nothing is skipped.', check: '', parts: parts(missed), files: bare });
+  const tests = files.filter((f) => TEST.test(f.path) && !GENERATED.test(f.path)).map((f) => f.path);
+  if (tests.length) stops.push({ title: 'Tests', explanation: raw?.tests || 'The test files changed in this pull request.', check: '', parts: [], files: tests });
+  const generated = files.filter((f) => GENERATED.test(f.path)).map((f) => f.path);
+  if (generated.length) stops.push({ title: 'Generated files', explanation: 'Machine generated. A glance is usually enough.', check: '', parts: [], files: generated });
+  return { briefing: raw?.briefing ?? '', stops, questions: raw?.questions ?? [] };
+}

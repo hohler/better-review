@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { GENERATED, TEST, segments, parseDiff, normalizeGuide, guideInput } from './ui/lib.js';
+import { GENERATED, TEST, segments, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './ui/lib.js';
 
 const diff = `✓ Workspace loaded.
 diff --git a/src/a.ts b/src/a.ts
@@ -72,5 +72,52 @@ assert.deepEqual(segments('Use `a.b` here:\n```tsx\nconst x = <A />;\n```\ndone 
   { type: 'block', lang: 'tsx', text: 'const x = <A />;' },
   { type: 'text', text: 'done ```open' },
 ]);
+
+// Tour: a.ts has 2 hunks, b.ts 1, plus a test, a lockfile and a binary.
+const tf = parseDiff(`diff --git a/a.ts b/a.ts
+--- a/a.ts
++++ b/a.ts
+@@ -1 +1 @@
+-one
++ONE
+@@ -9 +9 @@
+-nine
++NINE
+diff --git a/b.ts b/b.ts
+--- a/b.ts
++++ b/b.ts
+@@ -1 +1,2 @@
+ b
++c
+diff --git a/a.test.ts b/a.test.ts
+--- a/a.test.ts
++++ b/a.test.ts
+@@ -1 +1 @@
+-t
++T
+diff --git a/yarn.lock b/yarn.lock
+--- a/yarn.lock
++++ b/yarn.lock
+@@ -1 +1 @@
+-l
++L
+diff --git a/img.png b/img.png
+Binary files a/img.png and b/img.png differ
+`);
+assert.deepEqual(tourHunks(tf).map((h) => [h.id, h.path, h.hunk.start]), [['H1', 'a.ts', 1], ['H2', 'a.ts', 9], ['H3', 'b.ts', 1]]);
+const ti = tourInput({ title: 'T' }, tf);
+assert.ok(ti.includes('### a.ts\nH1 @@ -1 +1 @@\n-one\n+ONE\nH2 ') && ti.includes('a.test.ts') && !ti.includes('+T') && !ti.includes('+L'));
+assert.ok(!tourInput({ title: 'T' }, tf, 10).includes('H1'));
+const tour = normalizeTour({ briefing: 'b', tests: 'tt', questions: ['q'], stops: [{ title: 'S1', explanation: 'e', check: 'c', hunks: ['H3', 'H2', 'H99', 'H3'] }, { title: 'dup', hunks: ['H2'] }] }, tf);
+assert.deepEqual(tour.stops.map((s) => [s.title, s.parts.map((p) => [p.path, p.hunks.map((x) => x.start)]), s.files]), [
+  ['S1', [['b.ts', [1]], ['a.ts', [9]]], []],
+  ['Not covered by the tour', [['a.ts', [1]]], ['img.png']],
+  ['Tests', [], ['a.test.ts']],
+  ['Generated files', [], ['yarn.lock']],
+]);
+assert.equal(tour.stops[2].explanation, 'tt');
+// Whatever the LLM returns (here: nothing), every file is still in exactly one stop.
+const covered = normalizeTour(null, tf).stops.flatMap((s) => [...s.parts.map((p) => p.path), ...s.files]);
+assert.deepEqual(covered.sort(), tf.map((f) => f.path).sort());
 
 console.log('ok');

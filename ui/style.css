@@ -133,3 +133,23 @@ tr.gap { cursor: pointer; }
 tr.gap:hover td { color: var(--text); background: var(--page); }
 td.no.plain { cursor: default; }
 td.no.plain:hover { color: var(--muted); }
+
+.tour { max-width: 1180px; }
+.tour h2 { font-size: 21px; font-weight: 600; margin: 0 0 10px; letter-spacing: -.01em; }
+.tour h3 { font-size: 13px; margin: 26px 0 8px; }
+.tour .lead { margin-bottom: 14px; line-height: 1.6; }
+.tour .cards { margin-top: 20px; }
+.progress { display: flex; gap: 4px; align-items: center; margin-bottom: 26px; }
+.progress a { flex: 1; max-width: 46px; height: 5px; border-radius: 99px; background: var(--line); }
+.progress a.done { background: var(--green); opacity: .55; }
+.progress a.now { background: var(--accent); opacity: 1; }
+.progress span { margin-left: 10px; color: var(--muted); white-space: nowrap; }
+.checkbox { display: flex; gap: 8px; max-width: 820px; padding: 10px 14px; border-radius: 8px; background: light-dark(#fff7e6, #33290f); border: 1px solid light-dark(#f0d9a8, #5a4718); font-size: 14px; }
+.checkbox b { white-space: nowrap; color: light-dark(#92600a, #f0c060); }
+.route { padding-left: 22px; font-size: 14px; line-height: 1.9; }
+.route li.done a { color: var(--muted); text-decoration: line-through; }
+.tournav { display: flex; gap: 8px; align-items: center; position: sticky; bottom: -120px; /* sticky insets start at #main's 120px bottom padding */ margin: 28px -32px -120px; padding: 12px 32px; background: var(--page); border-top: 1px solid var(--line); z-index: 3; }
+.tournav button { padding: 6px 16px; }
+.verdict { display: flex; gap: 8px; margin-top: 24px; }
+.verdict button { padding: 6px 16px; }
+h1 a:hover { text-decoration: underline; }
