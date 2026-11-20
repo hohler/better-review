@@ -71,8 +71,11 @@ h1 { font-size: 23px; font-weight: 600; margin: 0 0 6px; letter-spacing: -.01em;
 @media (max-width: 1150px) { .step { display: block; } .step aside { position: static; width: auto; max-height: none; margin-bottom: 12px; } }
 
 .file { background: var(--bg); border-radius: 8px; margin-bottom: 10px; overflow: clip; }
-.file > header { display: flex; gap: 8px; align-items: center; padding: 9px 16px; cursor: pointer; position: sticky; top: 12px; z-index: 1; background: var(--bg); box-shadow: 0 -12px 0 var(--page); }
-/* The shadow is a page-coloured band that hides diff lines in the 12px gap above a stuck header. */
+.file > header { display: flex; gap: 8px; align-items: center; padding: 9px 16px; cursor: pointer; position: sticky; top: 12px; z-index: 1; }
+/* Two layers behind the header: a page-coloured band hiding diff lines in the gap and corners, then the rounded card surface. */
+.file > header::before, .file > header::after { content: ''; position: absolute; z-index: -1; left: 0; right: 0; }
+.file > header::before { top: -12px; height: 20px; background: var(--page); }
+.file > header::after { top: 0; bottom: 0; background: var(--bg); border-radius: 8px 8px 0 0; }
 .file > header b { font-weight: 500; white-space: nowrap; }
 .file.done > header b, .file.done .dir { opacity: .5; }
 .tag { color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 0 8px; font-size: 11px; white-space: nowrap; }
