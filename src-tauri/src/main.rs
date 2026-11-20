@@ -138,12 +138,18 @@ fn stream(bin: &str, args: &[&str], stdin: String, mut on_line: impl FnMut(&serd
     Ok(err_thread.join().unwrap_or_default().trim().to_string())
 }
 
+fn now_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+}
+
 // Claude enforces the schema itself and returns the object as structured_output.
+// Both agents add "_meta" to the result: who wrote it, with which model, how many tokens, how long, at what cost.
 fn claude(app: &tauri::AppHandle, id: &str, strong: bool, system: &str, schema: &str, input: String) -> Result<String, String> {
     let mut args = vec!["-p", "--model", if strong { TOUR_MODEL } else { GUIDE_MODEL }, "--tools", "", "--strict-mcp-config", "--setting-sources", "", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--json-schema", schema, "--system-prompt", system];
     if strong {
         args.extend(["--fallback-model", TOUR_FALLBACK]);
     }
+    let started = std::time::Instant::now();
     let mut result = None;
     let stderr = stream("claude", &args, input, |v| {
         if v["type"] == "stream_event" {
@@ -155,7 +161,21 @@ fn claude(app: &tauri::AppHandle, id: &str, strong: bool, system: &str, schema: 
         }
     })?;
     match result.as_ref().map(|v| &v["structured_output"]) {
-        Some(s) if s.is_object() => Ok(s.to_string()),
+        Some(s) if s.is_object() => {
+            let v = result.as_ref().unwrap();
+            let tokens = |k: &str| v["usage"][k].as_u64().unwrap_or(0);
+            let mut out = s.clone();
+            out["_meta"] = serde_json::json!({
+                "agent": "claude",
+                "model": v["modelUsage"].as_object().map(|m| m.keys().cloned().collect::<Vec<_>>().join(", ")).unwrap_or_default(),
+                "input": tokens("input_tokens") + tokens("cache_creation_input_tokens") + tokens("cache_read_input_tokens"),
+                "output": tokens("output_tokens"),
+                "seconds": started.elapsed().as_secs_f64(),
+                "cost": v["total_cost_usd"],
+                "at": now_ms(),
+            });
+            Ok(out.to_string())
+        }
         _ => {
             let said = result.as_ref().and_then(|v| v["result"].as_str()).unwrap_or("").trim().to_string();
             Err(format!("claude returned no result: {}", if said.is_empty() { &stderr } else { &said }))
@@ -182,17 +202,23 @@ fn copilot(app: &tauri::AppHandle, id: &str, system: &str, schema: &str, input: 
     let dir = empty_dir();
     let mut args = copilot_args(&dir);
     args.extend(["--output-format", "json", "--stream", "on"]);
+    let started = std::time::Instant::now();
     let mut last = String::new();
     for _ in 0..2 {
         app.emit("ai-progress", serde_json::json!({ "id": id, "reset": true })).ok();
-        let (mut answer, mut error) = (String::new(), String::new());
+        let (mut answer, mut error, mut model) = (String::new(), String::new(), String::new());
+        let mut usage = serde_json::Value::Null;
         let stderr = stream("copilot", &args, prompt.clone(), |v| match v["type"].as_str() {
             Some("assistant.message_delta") => {
                 if let Some(delta) = v["data"]["deltaContent"].as_str() {
                     app.emit("ai-progress", serde_json::json!({ "id": id, "delta": delta })).ok();
                 }
             }
-            Some("assistant.message") => answer = v["data"]["content"].as_str().unwrap_or("").to_string(),
+            Some("assistant.message") => {
+                answer = v["data"]["content"].as_str().unwrap_or("").to_string();
+                model = v["data"]["model"].as_str().unwrap_or("").to_string();
+            }
+            Some("session.usage_checkpoint") => usage = v["data"]["accountingSnapshot"].clone(),
             Some("session.error") => error = v["data"]["message"].as_str().unwrap_or("").to_string(),
             _ => {}
         })?;
@@ -205,7 +231,19 @@ fn copilot(app: &tauri::AppHandle, id: &str, system: &str, schema: &str, input: 
             _ => "",
         };
         match serde_json::from_str::<serde_json::Value>(json) {
-            Ok(v) if v.is_object() && required.iter().all(|k| v.get(k).is_some()) => return Ok(v.to_string()),
+            Ok(mut v) if v.is_object() && required.iter().all(|k| v.get(k).is_some()) => {
+                let tokens = |k: &str| usage["tokenDetails"][k]["tokenCount"].as_u64().unwrap_or(0);
+                v["_meta"] = serde_json::json!({
+                    "agent": "copilot",
+                    "model": model,
+                    "input": tokens("input") + tokens("cache_read") + tokens("cache_write"),
+                    "output": tokens("output"),
+                    "seconds": started.elapsed().as_secs_f64(),
+                    "premium": usage["totalPremiumRequestCost"],
+                    "at": now_ms(),
+                });
+                return Ok(v.to_string());
+            }
             Ok(_) => last = "the answer is missing required fields".into(),
             Err(e) => last = format!("the answer is not valid JSON ({e})"),
         }

@@ -110,7 +110,9 @@ function loadGuide(repo, id) {
   if (!guides.has(k)) {
     const p = loadPr(repo, id).then(async ({ pr, files }) => {
       const raw = await invoke('guide', { key: `${repo}-${id}-${pr.source.commit.hash}`, input: guideInput(pr, files), agent });
-      const guide = normalizeGuide(JSON.parse(raw), files);
+      const answer = JSON.parse(raw);
+      const guide = normalizeGuide(answer, files);
+      guide.meta = answer._meta;
       guideDone.set(k, guide);
       return guide;
     });
@@ -126,7 +128,9 @@ function loadTour(repo, id) {
   if (!tours.has(k)) {
     const p = loadPr(repo, id).then(async ({ pr, files }) => {
       const raw = await invoke('tour', { key: `${repo}-${id}-${pr.source.commit.hash}`, input: tourInput(pr, files), agent });
-      const tour = normalizeTour(JSON.parse(raw), files);
+      const answer = JSON.parse(raw);
+      const tour = normalizeTour(answer, files);
+      tour.meta = answer._meta;
       tourDone.set(k, tour);
       return tour;
     });
@@ -347,6 +351,23 @@ function threadEl(root, comments, post, lang) {
     return h('div', { className: 'comment' }, h('div', { className: 'chead' }, h('b', { textContent: c.user?.display_name ?? '?' }), h('small', { textContent: `${ago(c.created_on)}${c === root && root.resolution ? ' · resolved' : ''}` }), c.pending && h('span', { className: 'tag pending', textContent: 'Pending', title: 'Only you see this until you finish the review in Bitbucket' }), h('span', { className: 'grow' }), mine && [edit, del]), body);
   };
   return h('div', { className: 'thread' + (root.resolution ? ' resolved' : '') }, all.map(item), slot);
+}
+
+// Small centred line under a guide or tour: which agent and model wrote it, and what that request used.
+// The numbers are from when it was written. Showing it again from the cache costs nothing.
+function aiFooter(meta) {
+  if (!meta) return null;
+  const k = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+  const parts = [
+    meta.agent === 'copilot' ? 'GitHub Copilot' : 'Claude Code',
+    meta.model,
+    meta.input || meta.output ? `${k(meta.input)} tokens in, ${k(meta.output)} out` : null,
+    meta.seconds ? `${Math.round(meta.seconds)} s` : null,
+    typeof meta.cost === 'number' ? `$${meta.cost.toFixed(2)}` : null,
+    typeof meta.premium === 'number' ? `${meta.premium} premium request${meta.premium === 1 ? '' : 's'}` : null,
+    meta.at ? `written ${ago(meta.at)}` : null,
+  ];
+  return h('p', { className: 'aifoot', title: 'Usage of the one request that wrote this. It is cached, so reopening it costs nothing.', textContent: parts.filter(Boolean).join(' · ') });
 }
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -637,6 +658,7 @@ function draw(repo, id, data, guide) {
         h('span', { textContent: i === 0 ? 'Briefing' : i === last ? 'Wrap-up' : `Stop ${i} of ${t.stops.length}` }),
       ),
       body,
+      aiFooter(t.meta),
       h(
         'div',
         { className: 'tournav' },
@@ -658,7 +680,7 @@ function draw(repo, id, data, guide) {
     ],
     // The guide is requested here, on first open of the tab, so opening a PR alone never spends an AI request.
     guide: () => {
-      if (guide) return steps.map(step);
+      if (guide) return [steps.map(step), aiFooter(guide.meta)];
       const k = key(repo, id);
       // Progress: share of source files the answer has already placed in a group.
       const box = h('div', { className: 'guide' }, spinner('Preparing the review guide', `guide:${aiKey}`, (text) => core.filter((f) => text.includes(JSON.stringify(f.path))).length / (core.length || 1)));

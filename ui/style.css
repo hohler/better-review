@@ -203,3 +203,5 @@ td.no:not(.plain) { position: relative; }
 td.no:not(.plain):hover { color: transparent; }
 td.no:not(.plain):hover::after { content: ''; position: absolute; right: 12px; top: 3px; width: 14px; height: 14px; background: var(--accent); mask: url('comment.svg') center / contain no-repeat; -webkit-mask: url('comment.svg') center / contain no-repeat; }
 .tag.pending { color: light-dark(#b45309, #f0a34a); border-color: currentColor; }
+
+.aifoot { text-align: center; color: var(--muted); font-size: 12px; margin: 32px 0 0; }
