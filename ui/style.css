@@ -60,8 +60,9 @@ h1 { font-size: 23px; font-weight: 600; margin: 0 0 6px; letter-spacing: -.01em;
 .count { display: flex; gap: 18px; align-items: center; color: var(--muted); font-variant-numeric: tabular-nums; margin-bottom: 26px; }
 .check { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); cursor: pointer; white-space: nowrap; }
 .check input { margin: 0; accent-color: var(--accent); }
-.frow { display: flex; gap: 8px; padding: 4px 0; color: var(--text); white-space: nowrap; }
-.frow:hover span:first-child { text-decoration: underline; }
+/* Negative margin keeps the text aligned with the column while the hover pill extends past it. */
+.frow { display: flex; gap: 8px; padding: 5px 8px; margin: 0 -8px; border-radius: 6px; color: var(--text); white-space: nowrap; }
+.frow:hover { background: var(--line); }
 .frow.done { opacity: .45; }
 .dir { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
 .stats { font-family: var(--mono); font-size: 12px; white-space: nowrap; }
