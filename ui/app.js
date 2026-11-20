@@ -54,6 +54,11 @@ function spinner(label, id, measure) {
 }
 const key = (repo, id) => `${repo}#${id}`;
 
+// The shortcut modifier: Cmd on macOS, Ctrl elsewhere.
+const MAC = navigator.platform.startsWith('Mac');
+const MOD = MAC ? 'Cmd' : 'Ctrl';
+const modKey = (e) => (MAC ? e.metaKey : e.ctrlKey);
+
 let inboxes = load('inboxes', {});
 // No preset workspace: the setup wizard asks for it. Installs from before the wizard keep the ones they had loaded.
 let workspaces = load('workspaces', Object.keys(inboxes));
@@ -174,7 +179,7 @@ async function refresh() {
 
 function renderSide() {
   set(side, 
-    h('header', {}, h('strong', { textContent: 'Reviews' }), h('span', {}, h('button', { textContent: '⚙', title: 'Settings (Cmd+,)', onclick: () => openSettings(false) }), ' ', h('button', { textContent: '↻', title: 'Refresh', onclick: refresh }))),
+    h('header', {}, h('strong', { textContent: 'Reviews' }), h('span', {}, h('button', { textContent: '⚙', title: `Settings (${MOD}+,)`, onclick: () => openSettings(false) }), ' ', h('button', { textContent: '↻', title: 'Refresh', onclick: refresh }))),
     workspaces.map((ws) => {
       const items = inboxes[ws]?.items ?? [];
       const remove = () => {
@@ -257,7 +262,7 @@ function reload(repo, id) {
 // A plain-text Markdown editor with the two things reviews need: code insertion and a preview of how it will render.
 // opts: value (prefill when editing), label (submit button), lang (language for new code blocks, e.g. the file's extension).
 function commentForm(send, onCancel, { value = '', label = 'Comment', lang = '' } = {}) {
-  const area = h('textarea', { placeholder: 'Comment (Cmd+Enter to send)', value });
+  const area = h('textarea', { placeholder: `Comment (${MOD}+Enter to send)`, value });
   const preview = h('div', { className: 'preview', hidden: true });
   const err = h('p', { className: 'error' });
   const btn = h('button', { className: 'primary', textContent: label });
@@ -309,7 +314,7 @@ function commentForm(send, onCancel, { value = '', label = 'Comment', lang = '' 
     go(false);
   };
   area.onkeydown = (e) => {
-    if (e.metaKey && e.key === 'Enter') form.requestSubmit();
+    if (modKey(e) && e.key === 'Enter') form.requestSubmit();
     // Inside a code block Tab indents. Elsewhere it keeps moving focus, so the form stays keyboard friendly.
     if (e.key === 'Tab' && !e.shiftKey && (area.value.slice(0, area.selectionStart).match(/```/g)?.length ?? 0) % 2 === 1) {
       e.preventDefault();
@@ -806,7 +811,7 @@ function findOpen() {
   if (input.value) findRun(input.value);
 }
 document.addEventListener('keydown', (e) => {
-  if (!e.metaKey || document.querySelector('dialog[open]')) return;
+  if (!modKey(e) || document.querySelector('dialog[open]')) return;
   if (e.key === 'f') e.preventDefault(), findOpen();
   else if (e.key === 'g' && find.bar && !find.bar.hidden) e.preventDefault(), findRun(find.bar.querySelector('input').value, e.shiftKey ? -1 : 1);
 });

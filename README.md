@@ -1,6 +1,6 @@
 # Better Review
 
-Guided pull request reviews for Bitbucket, as a macOS app (Tauri).
+Guided pull request reviews for Bitbucket, as a desktop app for macOS and Windows (Tauri).
 
 ## Requirements
 
@@ -23,9 +23,17 @@ npm test        # diff parser and guide checks
 
 ## How it works
 
-- `src-tauri/src/main.rs`: runs `twg` and the AI agent (`claude` or `copilot`, both with all tools disabled), caches diffs, guides and tours per commit in `~/Library/Caches/better-review`
+- `src-tauri/src/main.rs`: runs `twg` and the AI agent (`claude` or `copilot`, both with all tools disabled), caches diffs, guides and tours per commit in `~/Library/Caches/better-review` (Windows: `%LOCALAPPDATA%\better-review\cache`)
 - `ui/lib.js`: diff parser, generated/test file detection, guide normalization
 - `ui/app.js`: the interface. Settings, workspaces and "Reviewed" marks live in the webview's localStorage.
+
+## Windows
+
+The installer (`Better Review_<version>_x64-setup.exe`) is built on GitHub by the "Windows build" workflow. It is attached to each release, and a manual run of the workflow gives a test build as a download.
+
+- Install `twg` and `claude` or `copilot` as on macOS. For Claude Code use the native installer (`claude.exe`): the npm version is a `.cmd` shim, which may not accept the long arguments the app passes.
+- The installer is not signed, so SmartScreen warns on first start: click **More info**, then **Run anyway**.
+- To build locally on Windows: `npm ci`, then `npx tauri build`.
 
 ## Opening the unsigned app
 
