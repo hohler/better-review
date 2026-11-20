@@ -54,7 +54,7 @@ h1 { font-size: 23px; font-weight: 600; margin: 0 0 6px; letter-spacing: -.01em;
 .guide { margin: -20px 0 24px; }
 
 .step { display: flex; gap: 24px; align-items: flex-start; margin-bottom: 64px; }
-.step aside { width: 360px; flex: none; position: sticky; top: 0; max-height: 100vh; overflow-y: auto; padding-bottom: 12px; }
+.step aside { width: 360px; flex: none; position: sticky; top: 12px; max-height: 100vh; overflow-y: auto; padding-bottom: 12px; }
 .step aside h2 { font-size: 19px; font-weight: 600; margin: 4px 0 6px; letter-spacing: -.01em; }
 .step aside p { font-size: 15px; line-height: 1.55; margin: 0 0 16px; }
 .count { display: flex; gap: 18px; align-items: center; color: var(--muted); font-variant-numeric: tabular-nums; margin-bottom: 26px; }
@@ -71,7 +71,8 @@ h1 { font-size: 23px; font-weight: 600; margin: 0 0 6px; letter-spacing: -.01em;
 @media (max-width: 1150px) { .step { display: block; } .step aside { position: static; width: auto; max-height: none; margin-bottom: 12px; } }
 
 .file { background: var(--bg); border-radius: 8px; margin-bottom: 10px; overflow: clip; }
-.file > header { display: flex; gap: 8px; align-items: center; padding: 9px 16px; cursor: pointer; position: sticky; top: 0; z-index: 1; background: var(--bg); }
+.file > header { display: flex; gap: 8px; align-items: center; padding: 9px 16px; cursor: pointer; position: sticky; top: 12px; z-index: 1; background: var(--bg); box-shadow: 0 -12px 0 var(--page); }
+/* The shadow is a page-coloured band that hides diff lines in the 12px gap above a stuck header. */
 .file > header b { font-weight: 500; white-space: nowrap; }
 .file.done > header b, .file.done .dir { opacity: .5; }
 .tag { color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 0 8px; font-size: 11px; white-space: nowrap; }
