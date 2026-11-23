@@ -1,4 +1,4 @@
-import { GENERATED, TEST, markdown, symbolIndex, symbolTarget, mdTokens, mdWrap, mdPrefix, mdEnter, mdIndent, mdLink, mdBlock, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './lib.js';
+import { GENERATED, TEST, markdown, symbolIndex, symbolTarget, defSnippet, mdTokens, mdWrap, mdPrefix, mdEnter, mdIndent, mdLink, mdBlock, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './lib.js';
 
 const { invoke } = window.__TAURI__.core;
 const side = document.getElementById('side');
@@ -550,28 +550,74 @@ function linkSymbols(cell, path, line, index) {
     for (const m of node.data.matchAll(index.pattern)) {
       const target = symbolTarget(index, m[0], path, line);
       if (!target) continue;
-      parts.push(node.data.slice(last, m.index), h('a', { className: 'sym', title: `Go to definition: ${target.path}:${target.line}`, textContent: m[0], onclick: (e) => (e.stopPropagation(), goToLine(target)) }));
+      parts.push(node.data.slice(last, m.index), h('a', { className: 'sym', title: `Go to definition: ${target.path}:${target.line}`, textContent: m[0], onclick: (e) => (e.stopPropagation(), (index.open ?? goToLine)(target, e.currentTarget)) }));
       last = m.index + m[0].length;
     }
     if (parts.length) node.replaceWith(...parts.flat(), node.data.slice(last));
   }
 }
 
-// Opens the file if needed, scrolls the line to the middle and marks it for a moment. "Back" returns to where you were.
-function goToLine({ path, line }) {
+// Opens the file if needed, scrolls the line to the middle and marks it for a moment. False if the line is not on screen.
+function flashLine({ path, line }) {
   const card = document.getElementById(`f-${path}`);
-  if (!card) return;
-  const from = main.scrollTop;
+  if (!card) return false;
   if (card.querySelector(':scope > .body[hidden], .placeholder')) card.show();
   const row = card.querySelector(`tr[data-n="${line}"]`);
-  if (!row) return card.scrollIntoView({ block: 'start' });
+  if (!row) return false;
   row.scrollIntoView({ block: 'center' });
   row.classList.add('flash');
   setTimeout(() => row.classList.remove('flash'), 1600);
+  return true;
+}
+// One floating button that undoes the last jump.
+function backChip(label, action) {
   document.querySelector('.backchip')?.remove();
-  const chip = h('button', { className: 'backchip', textContent: '↩ Back', title: 'Back to where you were', onclick: () => ((main.scrollTop = from), chip.remove()) });
+  const chip = h('button', { className: 'backchip', textContent: label, onclick: () => (chip.remove(), action()) });
   document.body.append(chip);
   setTimeout(() => chip.remove(), 20000);
+}
+function goToLine(target) {
+  const from = main.scrollTop;
+  if (flashLine(target)) backChip('↩ Back', () => (main.scrollTop = from));
+  else document.getElementById(`f-${target.path}`)?.scrollIntoView({ block: 'start' });
+}
+
+// The tour's answer to "where is this defined": a small card under the clicked name instead of a jump away.
+let closeDef = null;
+function defPopover(anchor, file, target, snippet, footer) {
+  const same = closeDef?.anchor === anchor;
+  closeDef?.();
+  if (same) return;
+  const name = file.path.split('/').pop();
+  const lang = name.split('.').pop();
+  const pop = h(
+    'div',
+    { className: 'defpop', role: 'dialog', ariaLabel: `Definition in ${file.path}` },
+    h('header', {}, icon(name), h('b', { textContent: name }), h('span', { className: 'dir', textContent: `${file.path.slice(0, -name.length)} · line ${target.line}` }), h('button', { className: 'x', type: 'button', textContent: '×', title: 'Close (Esc)', onclick: () => closeDef?.() })),
+    h('div', { className: 'scroll' }, h('table', { className: 'diff' }, h('tbody', {}, snippet.lines.map((l) => h('tr', { className: l.t === '+' ? 'add' : '' }, h('td', { className: 'no plain', textContent: l.n }), highlight(h('td', { className: 'code' }), l.text, lang))), snippet.more && h('tr', { className: 'gap' }, h('td', { colSpan: 2, textContent: 'The definition continues. Open it in the diff to see all of it.' }))))),
+    h('footer', {}, footer),
+  );
+  // Placed under the name, inside the scrolling area so it moves with the code.
+  const box = main.getBoundingClientRect();
+  const at = anchor.getBoundingClientRect();
+  const width = Math.min(680, main.clientWidth - 64);
+  pop.style.width = `${width}px`;
+  pop.style.top = `${at.bottom - box.top + main.scrollTop + 8}px`;
+  pop.style.left = `${Math.max(32, Math.min(at.left - box.left - 44, main.clientWidth - width - 32))}px`;
+  const onKey = (e) => e.key === 'Escape' && closeDef?.();
+  const onClick = (e) => !pop.contains(e.target) && e.target !== anchor && closeDef?.();
+  closeDef = () => {
+    pop.remove();
+    anchor.classList.remove('open');
+    document.removeEventListener('keydown', onKey);
+    document.removeEventListener('click', onClick, true);
+    closeDef = null;
+  };
+  closeDef.anchor = anchor;
+  document.addEventListener('keydown', onKey);
+  document.addEventListener('click', onClick, true);
+  anchor.classList.add('open');
+  main.append(pop);
 }
 
 function fileEl(f, hidden, ctx, only) {
@@ -675,6 +721,7 @@ function fileEl(f, hidden, ctx, only) {
 const barWatch = new ResizeObserver(([entry]) => main.style.setProperty('--bar', `${Math.round(entry.borderBoxSize[0].blockSize)}px`));
 
 function draw(repo, id, data, guide) {
+  closeDef?.();
   const { pr, files } = data;
   guide ??= guideDone.get(key(repo, id)); // may have arrived since the caller looked (background preparation)
   tourNav = null;
@@ -807,8 +854,21 @@ function draw(repo, id, data, guide) {
       draw(repo, id, data, guide);
     };
     tourNav = (d) => go(i + d, d > 0);
-    // No symbol links in the tour: a stop shows parts of files, so a target is often not on screen.
-    const tctx = { ...ctx, tour: true, symbols: null };
+    // In the tour a symbol link does not jump away: a definition outside the current stop opens in a popover.
+    const stopOf = ({ path, line }) => t.stops.findIndex((x) => x.files.includes(path) || x.parts.some((p) => p.path === path && p.hunks.some((hk) => hk.lines.some((l) => l.n === line)))) + 1;
+    const openDef = (target, anchor) => {
+      if (document.getElementById(`f-${target.path}`)?.querySelector(`tr[data-n="${target.line}"]`)) return closeDef?.(), goToLine(target);
+      const snippet = defSnippet(byPath[target.path], target.line);
+      if (!snippet) return;
+      const n = stopOf(target);
+      const where = !n ? '' : done.has(n) ? `✓ You saw this in stop ${n}` : n > i ? `Comes up in stop ${n}` : `Shown in stop ${n}`;
+      defPopover(anchor, byPath[target.path], target, snippet, [
+        h('small', { textContent: where }),
+        n > 0 && h('button', { type: 'button', textContent: `Go to stop ${n}`, title: t.stops[n - 1].title, onclick: () => (go(n), flashLine(target), backChip(`↩ Back to stop ${i}`, () => go(i))) }),
+        h('button', { type: 'button', textContent: 'Open in Diff', onclick: () => ((tab = 'diff'), draw(repo, id, data, guide), flashLine(target), backChip('↩ Back to the tour', () => ((tab = 'tour'), draw(repo, id, data, guide)))) }),
+      ]);
+    };
+    const tctx = { ...ctx, tour: true, symbols: { ...ctx.symbols, open: openDef } };
     const s = t.stops[i - 1];
     const body =
       i === 0

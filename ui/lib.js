@@ -336,6 +336,31 @@ export function symbolTarget(index, name, path, line) {
   return list.find((d) => d.path === path) ?? list.find((d) => !d.local) ?? null;
 }
 
+// The lines to show for a definition at file:line: a comment directly above it, then the body by indentation,
+// until a line is no deeper than the definition (a closing brace is kept). Stops at the hunk's end or after max lines.
+export function defSnippet(file, line, max = 15) {
+  for (const hunk of file.hunks) {
+    const lines = hunk.lines.filter((l) => l.t !== '-' && l.n != null);
+    const at = lines.findIndex((l) => l.n === line);
+    if (at < 0) continue;
+    const indent = (l) => l.text.match(/^\s*/)[0].length;
+    const base = indent(lines[at]);
+    let from = at;
+    while (from > 0 && /^\s*(\/\/|\/\*|\*|#)/.test(lines[from - 1].text)) from--;
+    let to = at + 1;
+    for (; to < lines.length; to++) {
+      const l = lines[to];
+      if (l.text.trim() && indent(l) <= base) {
+        if (/^\s*[)}\]]|^\s*end\b/.test(l.text)) to++;
+        break;
+      }
+    }
+    while (to > at + 1 && !lines[to - 1].text.trim()) to--;
+    return { lines: lines.slice(from, Math.min(to, from + max)), more: to - from > max };
+  }
+  return null;
+}
+
 // Tour: every hunk of a regular source file gets an id (H1, H2, ...) that the LLM uses to build its stops.
 const isCore = (f) => !GENERATED.test(f.path) && !TEST.test(f.path);
 export function tourHunks(files) {

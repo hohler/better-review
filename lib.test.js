@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { GENERATED, TEST, markdown, inline, mdTokens, symbolIndex, symbolTarget, mdWrap, mdPrefix, mdEnter, mdIndent, mdLink, mdBlock, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './ui/lib.js';
+import { GENERATED, TEST, markdown, inline, mdTokens, symbolIndex, symbolTarget, defSnippet, mdWrap, mdPrefix, mdEnter, mdIndent, mdLink, mdBlock, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './ui/lib.js';
 
 const diff = `✓ Workspace loaded.
 diff --git a/src/a.ts b/src/a.ts
@@ -143,6 +143,13 @@ assert.deepEqual(symbolTarget(sym, 'applyGiftCard', 'src/use.ts', 2), { path: 's
 assert.equal(symbolTarget(sym, 'applyGiftCard', 'src/card.ts', 1), null);
 assert.deepEqual(symbolTarget(sym, 'fmt', 'src/use.ts', 2), { path: 'src/use.ts', line: 1, local: true });
 assert.equal(symbolTarget(symbolIndex([sfile('a.ts', ['const run = () => 1;']), sfile('b.ts', ['run();'])]), 'run', 'b.ts', 1), null);
+
+// Definition snippet: comment above, body by indentation, closing brace kept, long bodies cut.
+const body = sfile('a.ts', ['const x = 1;', '', '// Adds two.', 'export function add(a, b) {', '  const sum = a + b;', '', '  return sum;', '}', '', 'function next() {}']);
+assert.deepEqual(defSnippet(body, 4).lines.map((l) => l.n), [3, 4, 5, 6, 7, 8]);
+assert.deepEqual(defSnippet(body, 10).lines.map((l) => l.n), [10]);
+assert.deepEqual([defSnippet(body, 4, 3).lines.length, defSnippet(body, 4, 3).more], [3, true]);
+assert.equal(defSnippet(body, 99), null);
 
 // Tour: a.ts has 2 hunks, b.ts 1, plus a test, a lockfile and a binary.
 const tf = parseDiff(`diff --git a/a.ts b/a.ts
