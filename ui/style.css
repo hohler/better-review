@@ -248,3 +248,9 @@ dialog.settings select { padding: 6px 8px; border: 1px solid var(--line); border
 .text table { border-collapse: collapse; white-space: normal; }
 .text th, .text td { border: 1px solid var(--line); padding: 4px 10px; text-align: left; vertical-align: top; }
 .text th { background: var(--page); font-weight: 600; }
+
+.meta:has(+ .reviewers) { margin-bottom: 10px; }
+.reviewers { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 36px; }
+.reviewers small { margin-right: 2px; }
+.reviewers .tag { font-size: 12px; padding: 1px 10px; background: var(--bg); }
+.reviewers .tag.plus { color: var(--green); border-color: currentColor; }

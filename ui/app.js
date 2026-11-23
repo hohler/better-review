@@ -405,6 +405,21 @@ function threadEl(root, comments, post, lang) {
   return h('div', { className: 'thread' + (root.resolution ? ' resolved' : '') }, all.map(item), slot);
 }
 
+// Who reviews this PR and where each stands: reviewers, plus anyone else who approved or asked for changes.
+function reviewersEl(pr) {
+  const order = { changes_requested: 0, approved: 1 };
+  const people = (pr.participants ?? [])
+    .filter((p) => (p.role === 'REVIEWER' || p.state) && p.user?.uuid !== pr.author?.uuid)
+    .sort((a, b) => (order[a.state] ?? 2) - (order[b.state] ?? 2));
+  if (!people.length) return null;
+  const chip = (p) => {
+    const [mark, label, cls] = p.state === 'approved' ? ['✓', 'approved', ' plus'] : p.state === 'changes_requested' ? ['●', 'changes requested', ' pending'] : ['○', 'has not reviewed yet', ''];
+    const name = p.user?.uuid === myUuid() ? 'You' : (p.user?.display_name ?? '?');
+    return h('span', { className: 'tag' + cls, title: `${name}: ${label}`, textContent: `${mark} ${name}${p.state === 'changes_requested' ? ' · changes requested' : ''}` });
+  };
+  return h('p', { className: 'reviewers' }, h('small', { textContent: 'Reviewers' }), people.map(chip));
+}
+
 // Small centred line under a guide or tour: which agent and model wrote it, and what that request used.
 // The numbers are from when it was written. Showing it again from the cache costs nothing.
 function aiFooter(meta) {
@@ -760,6 +775,7 @@ function draw(repo, id, data, guide) {
     ),
     h('h1', {}, title),
     h('p', { className: 'meta' }, h('span', { textContent: `${pr.author?.display_name ?? '?'} · ` }), h('code', { textContent: `${pr.destination.branch.name} ← ${pr.source.branch.name}` }), h('span', { textContent: ` · ${repo} #${id} · ${files.length} files · ${reviewed.size} reviewed · updated ${ago(pr.updated_on)}` })),
+    reviewersEl(pr),
     views[tab](),
   );
   main.scrollTop = 0;

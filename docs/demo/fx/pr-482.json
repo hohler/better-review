@@ -42,6 +42,24 @@
    "role": "REVIEWER",
    "approved": true,
    "state": "approved"
+  },
+  {
+   "user": {
+    "display_name": "Lena Frei",
+    "uuid": "{lena}"
+   },
+   "role": "REVIEWER",
+   "approved": false,
+   "state": "changes_requested"
+  },
+  {
+   "user": {
+    "display_name": "Priya Nair",
+    "uuid": "{priya}"
+   },
+   "role": "PARTICIPANT",
+   "approved": false,
+   "state": null
   }
  ],
  "links": {
