@@ -2,7 +2,7 @@
  "id": 482,
  "title": "SHOP-1284: Redeem gift cards at checkout",
  "state": "OPEN",
- "description": "Customers can enter a gift card code in the order summary. The card is checked on the server and its balance is taken off the total, shipping included.\n\nNot in this PR: paying the rest with a second gift card.",
+ "description": "## What\n\nCustomers can enter a **gift card code** in the order summary. The card is checked on the server and its balance is taken off the total, _shipping included_.\n\n## How to test\n\n1. Add something to the cart and go to checkout\n2. Enter `DEMO-1234-ABCD` as gift card\n3. The total drops by the card balance\n\n- [x] Unit tests for `applyGiftCard`\n- [ ] Translations other than English\n\n| Case | Expected |\n| --- | --- |\n| Balance covers the order | Total is 0 |\n| Card expired | Error \"This gift card has expired.\" |\n\n> Not in this PR: paying the rest with a second gift card.\n\nSpec: [SHOP-1284](https://acme.atlassian.net/browse/SHOP-1284)",
  "author": {
   "display_name": "Priya Nair",
   "uuid": "{priya}"
@@ -55,7 +55,7 @@
    "created_on": "@-4h",
    "updated_on": "@-4h",
    "content": {
-    "raw": "Nice and small. The rule living in one pure function makes this easy to review."
+    "raw": "Nice and small. Two things I like:\n\n- the rule lives in **one pure function**\n- the service maps every rejection to a typed `reason`"
    },
    "user": {
     "display_name": "Jonas Weber",

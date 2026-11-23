@@ -76,19 +76,119 @@ export function guideInput(pr, files, max = 150000) {
   return out;
 }
 
-// Minimal Markdown for comments: fenced blocks (```tsx) and inline `code`; everything else stays plain text.
-export function segments(raw) {
+// Markdown for descriptions and comments, parsed to plain data: the interface builds DOM nodes from it, never HTML.
+// Covers what PR text uses: headings, lists (nested, tasks), quotes, fenced code, tables, rules, emphasis, code and links.
+// ponytail: no setext headings, HTML or reference links; they show as the text that was typed.
+const ITEM = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
+const RULE = /^\s*([-*_])(\s*\1){2,}\s*$/;
+const FENCE = /^\s*(`{3,}|~{3,})\s*([\w+-]*)/;
+const TABLE_SEP = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
+const INLINE = /(`+)(.+?)\1(?!`)|!\[([^\]]*)\]\(([^)\s]+)[^)]*\)|\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)|<(https?:\/\/[^>\s]+)>|(https?:\/\/[^\s<>]+)|\*\*(.+?)\*\*|(?<!\w)__(.+?)__(?!\w)|~~(.+?)~~|\*(?!\s)(.+?)(?<!\s)\*|(?<!\w)_(?!\s)(.+?)(?<!\s)_(?!\w)|\\([\\`*_{}[\]()#+\-.!|>~])/gs;
+
+export function inline(text) {
   const out = [];
-  const inline = (s) => s.split(/`([^`\n]+)`/).forEach((t, i) => t && out.push({ type: i % 2 ? 'code' : 'text', text: t }));
+  const push = (s) => s && (out.at(-1)?.t === 'text' ? (out.at(-1).text += s) : out.push({ t: 'text', text: s }));
+  // Only web links become links: anything else (javascript:, file:) stays visible as text.
+  const link = (href, kids, whole) => (/^https:\/\//i.test(href) ? out.push({ t: 'link', href, kids }) : push(whole));
   let last = 0;
-  for (const m of raw.matchAll(/```([\w+-]*)[^\n]*\n([\s\S]*?)\n?```/g)) {
-    inline(raw.slice(last, m.index).replace(/\n$/, ''));
-    out.push({ type: 'block', lang: m[1], text: m[2] });
+  for (const m of text.matchAll(INLINE)) {
+    push(text.slice(last, m.index));
     last = m.index + m[0].length;
+    if (m[2] != null) out.push({ t: 'code', text: m[2].trim() || m[2] });
+    else if (m[4] != null) link(m[4], [{ t: 'text', text: m[3] || 'image' }], m[0]);
+    else if (m[6] != null) link(m[6], inline(m[5]), m[0]);
+    else if (m[7] != null) link(m[7], [{ t: 'text', text: m[7] }], m[0]);
+    else if (m[8] != null) {
+      // Punctuation after a bare URL belongs to the sentence, not the link.
+      const href = m[8].replace(/[.,;:!?)\]'"]+$/, '');
+      link(href, [{ t: 'text', text: href }], href);
+      push(m[8].slice(href.length));
+    } else if (m[14] != null) push(m[14]);
+    else out.push({ t: m[9] != null || m[10] != null ? 'b' : m[11] != null ? 's' : 'i', kids: inline(m[9] ?? m[10] ?? m[11] ?? m[12] ?? m[13]) });
   }
-  inline(raw.slice(last).replace(/^\n/, ''));
+  push(text.slice(last));
   return out;
 }
+
+const cells = (line) => line.trim().replace(/^\||\|$/g, '').split('|').map((c) => inline(c.trim()));
+const dedent = (lines) => {
+  const n = Math.min(...lines.filter((l) => l.trim()).map((l) => l.match(/^\s*/)[0].length));
+  return lines.map((l) => l.slice(Number.isFinite(n) ? n : 0));
+};
+
+function blocks(lines) {
+  const out = [];
+  let para = [];
+  const flush = () => {
+    if (para.length) out.push({ type: 'p', inline: inline(para.join('\n')) });
+    para = [];
+  };
+  for (let i = 0; i < lines.length; ) {
+    const line = lines[i];
+    let m;
+    if ((m = FENCE.exec(line))) {
+      flush();
+      const body = [];
+      for (i++; i < lines.length && !lines[i].trim().startsWith(m[1]); i++) body.push(lines[i]);
+      i++;
+      out.push({ type: 'code', lang: m[2], text: body.join('\n') });
+    } else if (!line.trim()) {
+      flush();
+      i++;
+    } else if ((m = /^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/.exec(line))) {
+      flush();
+      out.push({ type: 'h', level: m[1].length, inline: inline(m[2]) });
+      i++;
+    } else if (RULE.test(line)) {
+      flush();
+      out.push({ type: 'hr' });
+      i++;
+    } else if (/^\s*>/.test(line)) {
+      flush();
+      const quoted = [];
+      for (; i < lines.length && /^\s*>/.test(lines[i]); i++) quoted.push(lines[i].replace(/^\s*>\s?/, ''));
+      out.push({ type: 'quote', blocks: blocks(quoted) });
+    } else if (ITEM.test(line)) {
+      flush();
+      const [, indent, marker] = ITEM.exec(line);
+      const ordered = /\d/.test(marker);
+      const items = [];
+      while (i < lines.length && (m = ITEM.exec(lines[i])) && m[1].length === indent.length && /\d/.test(m[2]) === ordered) {
+        const text = [m[3]];
+        const kids = [];
+        // Deeper-indented lines belong to this item (nested list, code, second paragraph); a plain next line continues its text.
+        for (i++; i < lines.length; i++) {
+          const l = lines[i];
+          const deeper = l.match(/^\s*/)[0].length > indent.length;
+          if (!l.trim()) {
+            const next = lines.slice(i + 1).find((x) => x.trim());
+            if (!next || next.match(/^\s*/)[0].length <= indent.length) break;
+            kids.push('');
+          } else if (deeper && (kids.length || ITEM.test(l) || FENCE.test(l))) kids.push(l);
+          else if (deeper || !(ITEM.test(l) || RULE.test(l) || FENCE.test(l) || /^\s*(>|#{1,6}\s)/.test(l))) text.push(l.trim());
+          else break;
+        }
+        const task = /^\[([ xX])\]\s+(.*)$/s.exec(text.join('\n'));
+        items.push({ inline: inline(task ? task[2] : text.join('\n')), ...(task && { checked: task[1] !== ' ' }), blocks: blocks(dedent(kids)) });
+        while (i < lines.length && !lines[i].trim() && ITEM.test(lines.slice(i + 1).find((x) => x.trim()) ?? '')) i++;
+      }
+      out.push({ type: ordered ? 'ol' : 'ul', items });
+    } else if (line.includes('|') && TABLE_SEP.test(lines[i + 1] ?? '') && lines[i + 1].includes('-')) {
+      flush();
+      const head = cells(line);
+      const rows = [];
+      for (i += 2; i < lines.length && lines[i].includes('|') && lines[i].trim(); i++) rows.push(cells(lines[i]));
+      out.push({ type: 'table', head, rows });
+    } else {
+      para.push(line);
+      i++;
+    }
+  }
+  flush();
+  return out;
+}
+
+export const markdown = (raw) => blocks((raw ?? '').replace(/\r\n?/g, '\n').split('\n'));
 
 // Tour: every hunk of a regular source file gets an id (H1, H2, ...) that the LLM uses to build its stops.
 const isCore = (f) => !GENERATED.test(f.path) && !TEST.test(f.path);

@@ -415,11 +415,11 @@ async fn review(repo: String, id: u64, action: String) -> Result<String, String>
 
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
-    // Only Bitbucket and Jira issue links: the URL comes from the webview and goes to the system's opener.
-    let host = url.strip_prefix("https://").and_then(|u| u.split('/').next()).unwrap_or("");
-    let jira = host.ends_with(".atlassian.net") && host.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.') && url.contains(".atlassian.net/browse/");
-    if !url.starts_with("https://bitbucket.org/") && !jira {
-        return Err("Bitbucket and Jira links only".into());
+    // The URL comes from the webview and may be a link in PR text: only plain https web addresses reach the system's opener.
+    let host = url.strip_prefix("https://").and_then(|u| u.split(['/', '?', '#']).next()).unwrap_or("");
+    let host_ok = !host.is_empty() && !host.starts_with('-') && host.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.' || c == ':');
+    if !host_ok || url.len() > 2000 || url.chars().any(|c| c.is_whitespace() || c.is_control() || "\"'`<>\\".contains(c)) {
+        return Err("Only https links can be opened".into());
     }
     let mut opener = if cfg!(windows) { Command::new("rundll32") } else { Command::new("open") };
     if cfg!(windows) {

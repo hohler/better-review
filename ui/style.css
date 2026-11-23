@@ -228,3 +228,23 @@ dialog.settings select { padding: 6px 8px; border: 1px solid var(--line); border
 #side header button.busy > span { animation: spin 0.9s linear infinite; }
 #side header button.busy { opacity: 1; cursor: progress; }
 #side h2 button.warn { color: var(--red); font-weight: 600; text-transform: none; letter-spacing: 0; }
+
+/* Markdown inside descriptions, comments and AI text. Newlines inside a paragraph stay line breaks (pre-wrap). */
+.text > :first-child { margin-top: 0; }
+.text > :last-child { margin-bottom: 0; }
+.text p, .text ul, .text ol, .text blockquote, .text table, .text pre { margin: 0 0 8px; }
+.text .mh { font-weight: 700; margin: 14px 0 6px; line-height: 1.3; }
+.text .mh1 { font-size: 1.35em; }
+.text .mh2 { font-size: 1.2em; }
+.text .mh3 { font-size: 1.08em; }
+.text ul, .text ol { padding-left: 22px; white-space: normal; }
+.text li { margin: 2px 0; }
+.text li > ul, .text li > ol { margin: 2px 0 0; }
+.text li.task { list-style: none; margin-left: -20px; }
+.text li.task input { margin: 0 6px 0 0; vertical-align: -1px; accent-color: var(--accent); }
+.text blockquote { padding: 2px 0 2px 12px; border-left: 3px solid var(--line); color: var(--muted); }
+.text hr { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
+.text a { text-decoration: underline; text-underline-offset: 2px; }
+.text table { border-collapse: collapse; white-space: normal; }
+.text th, .text td { border: 1px solid var(--line); padding: 4px 10px; text-align: left; vertical-align: top; }
+.text th { background: var(--page); font-weight: 600; }

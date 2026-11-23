@@ -1,4 +1,4 @@
-import { GENERATED, TEST, segments, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './lib.js';
+import { GENERATED, TEST, markdown, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './lib.js';
 
 const { invoke } = window.__TAURI__.core;
 const side = document.getElementById('side');
@@ -24,8 +24,22 @@ const highlight = (el, text, lang) => {
   else el.textContent = text;
   return el;
 };
-const rich = (raw, className = 'text') =>
-  h('div', { className }, segments(raw ?? '').map((s) => (s.type === 'block' ? h('pre', {}, highlight(h('code'), s.text, s.lang)) : s.type === 'code' ? h('code', { textContent: s.text }) : s.text)));
+// Markdown to DOM nodes. A link opens in the system browser: a plain href would navigate the app window away.
+const TAGS = { b: 'strong', i: 'em', s: 'del' };
+const inlineEl = (nodes) =>
+  nodes.map((n) => (n.t === 'text' ? n.text : n.t === 'code' ? h('code', { textContent: n.text }) : n.t === 'link' ? h('a', { title: n.href, onclick: () => invoke('open_url', { url: n.href }).catch(() => {}) }, inlineEl(n.kids)) : h(TAGS[n.t], {}, inlineEl(n.kids))));
+const blockEl = (b) => {
+  if (b.type === 'code') return h('pre', {}, highlight(h('code'), b.text, b.lang));
+  if (b.type === 'hr') return h('hr');
+  if (b.type === 'quote') return h('blockquote', {}, b.blocks.map(blockEl));
+  // Not h1-h6: those carry the app's own page styles.
+  if (b.type === 'h') return h('p', { className: `mh mh${Math.min(b.level, 4)}`, role: 'heading', ariaLevel: b.level }, inlineEl(b.inline));
+  if (b.type === 'table') return h('div', { className: 'scroll' }, h('table', {}, h('thead', {}, h('tr', {}, b.head.map((c) => h('th', {}, inlineEl(c))))), h('tbody', {}, b.rows.map((r) => h('tr', {}, r.map((c) => h('td', {}, inlineEl(c))))))));
+  if (b.type === 'ul' || b.type === 'ol')
+    return h(b.type, {}, b.items.map((i) => h('li', { className: i.checked == null ? '' : 'task' }, i.checked != null && h('input', { type: 'checkbox', checked: i.checked, disabled: true }), inlineEl(i.inline), i.blocks.map(blockEl))));
+  return h('p', {}, inlineEl(b.inline));
+};
+const rich = (raw, className = 'text') => h('div', { className }, markdown(raw).map(blockEl));
 // Progress: the backend streams Claude's answer as "ai-progress" events, keyed "guide:<key>" or "tour:<key>".
 const streamed = new Map(); // id -> answer text so far
 const painters = new Map(); // id -> repaint of the spinner currently showing that id

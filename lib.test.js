@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { GENERATED, TEST, segments, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './ui/lib.js';
+import { GENERATED, TEST, markdown, inline, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './ui/lib.js';
 
 const diff = `✓ Workspace loaded.
 diff --git a/src/a.ts b/src/a.ts
@@ -65,12 +65,33 @@ const input = guideInput({ title: 'T', description: '' }, files);
 assert.ok(input.includes('pnpm-lock.yaml (added, +1 -0) [generated]') && !input.includes('+lock') && input.includes('-keep') === false);
 assert.ok(guideInput({ title: 'T' }, files, 10).includes('--- src/a.ts\n(truncated)'));
 
-assert.deepEqual(segments('Use `a.b` here:\n```tsx\nconst x = <A />;\n```\ndone ```open'), [
-  { type: 'text', text: 'Use ' },
-  { type: 'code', text: 'a.b' },
-  { type: 'text', text: ' here:' },
-  { type: 'block', lang: 'tsx', text: 'const x = <A />;' },
-  { type: 'text', text: 'done ```open' },
+// Markdown: blocks, then inline. Unsafe links stay text, snake_case is not emphasis, a bare URL drops its full stop.
+const T = (text) => ({ t: 'text', text });
+assert.deepEqual(markdown('# Title\n\nUse `a.b` **now**\nsecond line\n```tsx\nconst x = <A />;\n```\n---\n> quoted'), [
+  { type: 'h', level: 1, inline: [T('Title')] },
+  { type: 'p', inline: [T('Use '), { t: 'code', text: 'a.b' }, T(' '), { t: 'b', kids: [T('now')] }, T('\nsecond line')] },
+  { type: 'code', lang: 'tsx', text: 'const x = <A />;' },
+  { type: 'hr' },
+  { type: 'quote', blocks: [{ type: 'p', inline: [T('quoted')] }] },
+]);
+assert.deepEqual(markdown('- [x] done\n- [ ] open\n  - nested\n\n1. one\n2. two'), [
+  { type: 'ul', items: [
+    { inline: [T('done')], checked: true, blocks: [] },
+    { inline: [T('open')], checked: false, blocks: [{ type: 'ul', items: [{ inline: [T('nested')], blocks: [] }] }] },
+  ] },
+  { type: 'ol', items: [{ inline: [T('one')], blocks: [] }, { inline: [T('two')], blocks: [] }] },
+]);
+assert.deepEqual(markdown('| A | B |\n|---|---|\n| 1 | `2` |'), [{ type: 'table', head: [[T('A')], [T('B')]], rows: [[[T('1')], [{ t: 'code', text: '2' }]]] }]);
+assert.deepEqual(inline('see [docs](https://a.io/x) and https://b.io/y. not [bad](javascript:alert(1)) or snake_case_name, _it_ ~~no~~ \\*raw\\*'), [
+  T('see '),
+  { t: 'link', href: 'https://a.io/x', kids: [T('docs')] },
+  T(' and '),
+  { t: 'link', href: 'https://b.io/y', kids: [T('https://b.io/y')] },
+  T('. not [bad](javascript:alert(1)) or snake_case_name, '),
+  { t: 'i', kids: [T('it')] },
+  T(' '),
+  { t: 's', kids: [T('no')] },
+  T(' *raw*'),
 ]);
 
 // Tour: a.ts has 2 hunks, b.ts 1, plus a test, a lockfile and a binary.
