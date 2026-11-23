@@ -190,6 +190,73 @@ function blocks(lines) {
 
 export const markdown = (raw) => blocks((raw ?? '').replace(/\r\n?/g, '\n').split('\n'));
 
+// Editing helpers for the markdown comment field. Each takes the text and selection and returns one edit:
+// replace [from, to) with text, then select [start, end). They return null when they do not apply.
+const lineSpan = (v, s, e) => [v.lastIndexOf('\n', s - 1) + 1, v.indexOf('\n', e) < 0 ? v.length : v.indexOf('\n', e)];
+const inFence = (v, s) => (v.slice(0, s).match(/^\s*```/gm)?.length ?? 0) % 2 === 1;
+const LIST_LINE = /^\s*([-*+]|\d+[.)])\s/;
+
+// Bold, italic, code: wraps the selection or a placeholder. On text that is already wrapped it removes the wrapping.
+export function mdWrap(v, s, e, before, after = before, placeholder = 'text') {
+  const sel = v.slice(s, e);
+  if (s >= before.length && v.slice(s - before.length, s) === before && v.slice(e, e + after.length) === after) return { from: s - before.length, to: e + after.length, text: sel, start: s - before.length, end: e - before.length };
+  if (sel.length >= before.length + after.length && sel.startsWith(before) && sel.endsWith(after)) {
+    const inner = sel.slice(before.length, sel.length - after.length);
+    return { from: s, to: e, text: inner, start: s, end: s + inner.length };
+  }
+  const text = sel || placeholder;
+  return { from: s, to: e, text: before + text + after, start: s + before.length, end: s + before.length + text.length };
+}
+
+// Lists, tasks and quotes: puts the marker on every selected line, or takes it off if all of them have it.
+export function mdPrefix(v, s, e, kind) {
+  const [from, to] = lineSpan(v, s, e > s && v[e - 1] === '\n' ? e - 1 : e);
+  const lines = v.slice(from, to).split('\n');
+  const has = { ul: /^\s*[-*+]\s+(?!\[[ xX]\])/, ol: /^\s*\d+[.)]\s+/, task: /^\s*[-*+]\s+\[[ xX]\]\s+/, quote: /^\s*>/ }[kind];
+  const mark = (i) => ({ ul: '- ', ol: `${i + 1}. `, task: '- [ ] ', quote: '> ' })[kind];
+  const strip = (l) => l.replace(/^(\s*)(?:[-*+]\s+\[[ xX]\]\s+|[-*+]\s+|\d+[.)]\s+|>\s?)/, '$1');
+  const on = lines.every((l) => has.test(l));
+  const text = lines.map((l, i) => (on ? strip(l) : strip(l).replace(/^(\s*)/, `$1${mark(i)}`))).join('\n');
+  return { from, to, text, start: s === e ? from + text.length : from, end: from + text.length };
+}
+
+// Enter in a list continues it with the next marker. Enter on an empty item ends the list.
+export function mdEnter(v, s, e) {
+  if (s !== e || inFence(v, s)) return null;
+  const from = v.lastIndexOf('\n', s - 1) + 1;
+  const m = /^(\s*)(?:([-*+])|(\d+)([.)]))\s+(\[[ xX]\]\s+)?(.*)$/.exec(v.slice(from, s));
+  if (!m) return null;
+  if (!m[6].trim()) return { from, to: s, text: '', start: from, end: from };
+  const next = `\n${m[1]}${m[2] ?? `${+m[3] + 1}${m[4]}`} ${m[5] ? '[ ] ' : ''}`;
+  return { from: s, to: s, text: next, start: s + next.length, end: s + next.length };
+}
+
+// Tab and Shift+Tab: nests or un-nests list items; inside a code block Tab types two spaces.
+export function mdIndent(v, s, e, out) {
+  if (inFence(v, s)) return out ? null : { from: s, to: e, text: '  ', start: s + 2, end: s + 2 };
+  const [from, to] = lineSpan(v, s, e);
+  const lines = v.slice(from, to).split('\n');
+  if (!lines.every((l) => LIST_LINE.test(l))) return null;
+  const text = lines.map((l) => (out ? l.replace(/^ {1,2}/, '') : `  ${l}`)).join('\n');
+  const first = text.split('\n')[0].length - lines[0].length;
+  return { from, to, text, start: Math.max(from, s + first), end: Math.max(from, e + text.length - (to - from)) };
+}
+
+// A link around the selection. Without a URL the placeholder URL stays selected, ready to be typed over.
+export function mdLink(v, s, e, url) {
+  const label = v.slice(s, e) || 'text';
+  const text = `[${label}](${url ?? 'https://'})`;
+  return url ? { from: s, to: e, text, start: s + text.length, end: s + text.length } : { from: s, to: e, text, start: s + label.length + 3, end: s + text.length - 1 };
+}
+
+// A fenced code block on its own lines, around the selection or the given code.
+export function mdBlock(v, s, e, lang = '', code) {
+  const body = code ?? (v.slice(s, e) || 'code');
+  const lead = s > 0 && v[s - 1] !== '\n' ? '\n' : '';
+  const open = `${lead}\`\`\`${lang}\n`;
+  return { from: s, to: e, text: `${open}${body}\n\`\`\`\n`, start: s + open.length, end: s + open.length + body.length };
+}
+
 // Tour: every hunk of a regular source file gets an id (H1, H2, ...) that the LLM uses to build its stops.
 const isCore = (f) => !GENERATED.test(f.path) && !TEST.test(f.path);
 export function tourHunks(files) {

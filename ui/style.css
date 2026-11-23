@@ -117,8 +117,6 @@ tr.note td { padding: 8px 16px 8px 60px; font-family: var(--sans); font-size: 13
 .thread.resolved { opacity: .55; }
 .comment + .comment { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 form.comment { max-width: 820px; margin: 6px 0; }
-form.comment textarea { width: 100%; min-height: 70px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); resize: vertical; }
-form.comment div { display: flex; gap: 6px; margin-top: 4px; }
 
 #grip { width: 7px; margin: 0 -4px 0 -3px; flex: none; cursor: col-resize; z-index: 2; }
 #grip:hover, #grip:active { background: var(--amber); opacity: .5; }
@@ -194,11 +192,6 @@ dialog.settings input:not([type]) { width: 100%; padding: 6px 10px; border: 1px 
 .chead { display: flex; gap: 8px; align-items: baseline; }
 .chead a { font-size: 12px; color: var(--muted); }
 .chead a:hover { color: var(--text); }
-.tools { display: flex; gap: 6px; margin-bottom: 4px; }
-.tools button { font-size: 12px; padding: 2px 8px; }
-form.comment textarea { font-family: var(--mono); font-size: 12px; line-height: 1.5; min-height: 96px; tab-size: 2; }
-form.comment .preview { display: block; min-height: 96px; padding: 6px 10px; margin: 0; border: 1px solid var(--line); border-radius: 6px; }
-form.comment .preview[hidden] { display: none; }
 
 .findbar { position: fixed; top: 60px; right: 28px; z-index: 6; display: flex; gap: 6px; align-items: center; padding: 6px 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgb(0 0 0 / .16); }
 .findbar[hidden] { display: none; }
@@ -254,3 +247,19 @@ dialog.settings select { padding: 6px 8px; border: 1px solid var(--line); border
 .reviewers small { margin-right: 2px; }
 .reviewers .tag { font-size: 12px; padding: 1px 10px; background: var(--bg); }
 .reviewers .tag.plus { color: var(--green); border-color: currentColor; }
+
+/* Comment editor: toolbar, markdown field and live preview in one frame. */
+.ed { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--bg); }
+.ed:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.ed .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 5px 6px; border-bottom: 1px solid var(--line); background: var(--page); }
+.ed .bar button { border: 0; background: none; min-width: 28px; height: 26px; padding: 0 7px; border-radius: 6px; color: var(--muted); }
+.ed .bar button:hover { background: var(--line); color: var(--text); }
+.ed .bar button.mono { font-family: var(--mono); font-size: 12px; }
+.ed .bar .sep { width: 1px; height: 16px; background: var(--line); margin: 0 5px; }
+.ed .bar small { font-size: 11px; margin-right: 6px; }
+.ed textarea { display: block; width: 100%; min-height: 84px; max-height: 60vh; padding: 10px 12px; border: 0; outline: 0; background: none; resize: none; font-family: var(--mono); font-size: 12px; line-height: 1.6; tab-size: 2; }
+.ed .live { border-top: 1px dashed var(--line); padding: 10px 12px 12px; }
+.ed .live[hidden] { display: none; }
+.ed .live > small { display: block; margin-bottom: 6px; font-size: 11px; }
+form.comment .foot { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+form.comment .foot small { margin-left: auto; }

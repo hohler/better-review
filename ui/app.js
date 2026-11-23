@@ -1,4 +1,4 @@
-import { GENERATED, TEST, markdown, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './lib.js';
+import { GENERATED, TEST, markdown, mdWrap, mdPrefix, mdEnter, mdIndent, mdLink, mdBlock, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './lib.js';
 
 const { invoke } = window.__TAURI__.core;
 const side = document.getElementById('side');
@@ -308,42 +308,70 @@ function reload(repo, id) {
 
 // A plain-text Markdown editor with the two things reviews need: code insertion and a preview of how it will render.
 // opts: value (prefill when editing), label (submit button), lang (language for new code blocks, e.g. the file's extension).
-function commentForm(send, onCancel, { value = '', label = 'Comment', lang = '' } = {}) {
-  const area = h('textarea', { placeholder: `Comment (${MOD}+Enter to send)`, value });
-  const preview = h('div', { className: 'preview', hidden: true });
+// The comment editor: a markdown text field with a toolbar, shortcuts, list editing and a live preview below it.
+// quote: the code of the line being commented on, offered as "Quote line".
+function commentForm(send, onCancel, { value = '', label = 'Comment', lang = '', quote } = {}) {
+  const area = h('textarea', { placeholder: 'Write a comment. Markdown works.', value, rows: 3 });
+  const live = h('div', { className: 'live', hidden: true });
   const err = h('p', { className: 'error' });
   const btn = h('button', { className: 'primary', textContent: label });
-  // Wraps the selection, or a placeholder, and leaves it selected so typing replaces it.
-  const wrap = (before, after, placeholder) => {
-    const s = area.selectionStart;
-    const text = area.value.slice(s, area.selectionEnd) || placeholder;
-    area.setRangeText(before + text + after, s, area.selectionEnd, 'end');
-    area.setSelectionRange(s + before.length, s + before.length + text.length);
-    area.focus();
+  const refresh = () => {
+    area.style.height = 'auto';
+    area.style.height = `${area.scrollHeight}px`;
+    live.hidden = !area.value.trim();
+    if (!live.hidden) set(live, h('small', { textContent: 'Preview' }), rich(area.value));
   };
-  const block = () => wrap(`${area.selectionStart > 0 && area.value[area.selectionStart - 1] !== '\n' ? '\n' : ''}\`\`\`${lang}\n`, '\n```\n', 'code');
-  const toggle = h('button', {
-    type: 'button',
-    textContent: 'Preview',
-    onclick: () => {
-      preview.hidden = !preview.hidden;
-      area.hidden = !preview.hidden;
-      toggle.textContent = preview.hidden ? 'Preview' : 'Write';
-      if (!preview.hidden) set(preview, area.value.trim() ? rich(area.value) : h('p', { className: 'muted', textContent: 'Nothing to preview.' }));
-      else area.focus();
-    },
-  });
-  const tools = h(
+  // Edits go through insertText so that undo keeps working; setRangeText is the fallback.
+  const apply = (r) => {
+    if (!r) return false;
+    area.focus();
+    area.setSelectionRange(r.from, r.to);
+    if (!document.execCommand('insertText', false, r.text)) area.setRangeText(r.text, r.from, r.to, 'end');
+    area.setSelectionRange(r.start, r.end);
+    refresh();
+    return true;
+  };
+  const run = (fn, ...args) => apply(fn(area.value, area.selectionStart, area.selectionEnd, ...args));
+  const tool = (content, title, keys, action, props = {}) => {
+    const b = h('button', { type: 'button', title: keys ? `${title} (${keys})` : title, onclick: action, ...props });
+    b.append(content);
+    return b;
+  };
+  const actions = {
+    b: () => run(mdWrap, '**'),
+    i: () => run(mdWrap, '_'),
+    e: () => run(mdWrap, '`', '`', 'code'),
+    k: () => run(mdLink),
+    C: () => run(mdBlock, lang),
+  };
+  const bar = h(
     'div',
-    { className: 'tools' },
-    h('button', { type: 'button', textContent: '{ } Code block', title: 'Insert a code block, or wrap the selection in one', onclick: block }),
-    h('button', { type: 'button', textContent: '`code`', title: 'Inline code', onclick: () => wrap('`', '`', 'code') }),
+    { className: 'bar' },
+    tool(h('b', { textContent: 'B' }), 'Bold', `${MOD}+B`, actions.b),
+    tool(h('i', { textContent: 'I' }), 'Italic', `${MOD}+I`, actions.i),
+    tool(h('s', { textContent: 'S' }), 'Strikethrough', '', () => run(mdWrap, '~~')),
+    h('span', { className: 'sep' }),
+    tool('`c`', 'Inline code', `${MOD}+E`, actions.e, { className: 'mono' }),
+    tool('{ }', 'Code block', `${MOD}+Shift+C`, actions.C, { className: 'mono' }),
+    quote != null && tool('Quote line', 'Insert the line you are commenting on as a code block', '', () => run(mdBlock, lang, quote)),
+    h('span', { className: 'sep' }),
+    tool('Link', 'Link', `${MOD}+K`, actions.k),
+    tool('• List', 'Bullet list', '', () => run(mdPrefix, 'ul')),
+    tool('1. List', 'Numbered list', '', () => run(mdPrefix, 'ol')),
+    tool('☐ Task', 'Task list', '', () => run(mdPrefix, 'task')),
+    tool('❝', 'Quote', '', () => run(mdPrefix, 'quote')),
     h('span', { className: 'grow' }),
-    toggle,
+    h('small', { textContent: 'Markdown' }),
   );
   // Two ways to send a new comment: post it now, or keep it pending as part of a review. Editing only saves.
   const later = !value && h('button', { type: 'button', textContent: 'Add to review', title: 'Saved as pending: only you see it until you finish the review in Bitbucket', onclick: () => go(true) });
-  const form = h('form', { className: 'comment' }, tools, area, preview, h('div', {}, btn, later, onCancel && h('button', { type: 'button', textContent: 'Cancel', onclick: onCancel })), err);
+  const form = h(
+    'form',
+    { className: 'comment' },
+    h('div', { className: 'ed' }, bar, area, live),
+    h('div', { className: 'foot' }, btn, later, onCancel && h('button', { type: 'button', textContent: 'Cancel', onclick: onCancel }), h('small', { textContent: `${MOD}+Enter to send` })),
+    err,
+  );
   const go = async (pending) => {
     if (!area.value.trim() || btn.disabled) return;
     btn.disabled = true;
@@ -360,15 +388,30 @@ function commentForm(send, onCancel, { value = '', label = 'Comment', lang = '' 
     e.preventDefault();
     go(false);
   };
+  const PAIRS = { '`': '`', '*': '*', _: '_', '(': ')', '[': ']' };
   area.onkeydown = (e) => {
+    const done = (ok) => ok && e.preventDefault();
+    const selected = area.selectionStart !== area.selectionEnd;
+    // Cmd+B, I, E, K and Cmd+Shift+C. Plain Cmd+C stays copy.
+    const letter = e.key.toLowerCase();
+    const shortcut = modKey(e) && !e.altKey ? (e.shiftKey ? (letter === 'c' ? 'C' : '') : letter) : '';
     if (modKey(e) && e.key === 'Enter') form.requestSubmit();
-    // Inside a code block Tab indents. Elsewhere it keeps moving focus, so the form stays keyboard friendly.
-    if (e.key === 'Tab' && !e.shiftKey && (area.value.slice(0, area.selectionStart).match(/```/g)?.length ?? 0) % 2 === 1) {
-      e.preventDefault();
-      area.setRangeText('  ', area.selectionStart, area.selectionEnd, 'end');
-    }
+    else if (actions[shortcut]) done((actions[shortcut](), true));
+    else if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) done(run(mdEnter));
+    // Tab only acts in lists and code blocks. Elsewhere it keeps moving focus, so the form stays keyboard friendly.
+    else if (e.key === 'Tab' && !modKey(e)) done(run(mdIndent, e.shiftKey));
+    // Typing a bracket or marker with text selected wraps the selection.
+    else if (selected && PAIRS[e.key] && !modKey(e)) done(run(mdWrap, e.key, PAIRS[e.key]));
+    // Esc closes a reply or edit, but never throws away something typed.
+    else if (e.key === 'Escape' && onCancel && area.value === value) onCancel();
   };
-  setTimeout(() => onCancel && area.focus());
+  // Pasting a web address onto selected text makes that text a link.
+  area.onpaste = (e) => {
+    const url = e.clipboardData?.getData('text').trim() ?? '';
+    if (area.selectionStart !== area.selectionEnd && /^https:\/\/\S+$/.test(url)) e.preventDefault(), run(mdLink, url);
+  };
+  area.oninput = refresh;
+  setTimeout(() => (refresh(), onCancel && area.focus()));
   return form;
 }
 
@@ -541,7 +584,7 @@ function fileEl(f, hidden, ctx, only) {
         const anchor = l.t === '-' ? { fromLine: l.o } : { line: l.n };
         const start = () => {
           if (row.nextSibling?.dataset.form) return row.nextSibling.remove();
-          const tr = note(commentForm((text, pending) => post({ text, pending, path: f.path, ...anchor }), () => tr.remove(), { lang }));
+          const tr = note(commentForm((text, pending) => post({ text, pending, path: f.path, ...anchor }), () => tr.remove(), { lang, quote: l.text }));
           tr.dataset.form = '1';
           row.after(tr);
         };

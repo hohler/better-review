@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { GENERATED, TEST, markdown, inline, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './ui/lib.js';
+import { GENERATED, TEST, markdown, inline, mdWrap, mdPrefix, mdEnter, mdIndent, mdLink, mdBlock, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './ui/lib.js';
 
 const diff = `✓ Workspace loaded.
 diff --git a/src/a.ts b/src/a.ts
@@ -93,6 +93,36 @@ assert.deepEqual(inline('see [docs](https://a.io/x) and https://b.io/y. not [bad
   { t: 's', kids: [T('no')] },
   T(' *raw*'),
 ]);
+
+// Editor helpers: apply the edit, mark the selection with ⟦ ⟧.
+const edit = (text, fn, ...args) => {
+  const s = text.indexOf('⟦');
+  const e = text.indexOf('⟧') - 1;
+  const v = text.replace('⟦', '').replace('⟧', '');
+  const r = fn(v, s, e, ...args);
+  if (!r) return null;
+  const out = v.slice(0, r.from) + r.text + v.slice(r.to);
+  return `${out.slice(0, r.start)}⟦${out.slice(r.start, r.end)}⟧${out.slice(r.end)}`;
+};
+assert.equal(edit('a ⟦b⟧ c', mdWrap, '**'), 'a **⟦b⟧** c');
+assert.equal(edit('a **⟦b⟧** c', mdWrap, '**'), 'a ⟦b⟧ c');
+assert.equal(edit('a ⟦**b**⟧ c', mdWrap, '**'), 'a ⟦b⟧ c');
+assert.equal(edit('a ⟦⟧ c', mdWrap, '`', '`', 'code'), 'a `⟦code⟧` c');
+assert.equal(edit('x\n⟦one\ntwo⟧\ny', mdPrefix, 'ol'), 'x\n⟦1. one\n2. two⟧\ny');
+assert.equal(edit('⟦- one\n- two⟧', mdPrefix, 'ul'), '⟦one\ntwo⟧');
+assert.equal(edit('- one⟦⟧', mdPrefix, 'task'), '- [ ] one⟦⟧');
+assert.equal(edit('- one⟦⟧', mdEnter), '- one\n- ⟦⟧');
+assert.equal(edit('  3) [x] done⟦⟧', mdEnter), '  3) [x] done\n  4) [ ] ⟦⟧');
+assert.equal(edit('- one\n- ⟦⟧', mdEnter), '- one\n⟦⟧');
+assert.equal(edit('plain⟦⟧', mdEnter), null);
+assert.equal(edit('```\n- one⟦⟧', mdEnter), null);
+assert.equal(edit('- a\n- b⟦⟧', mdIndent, false), '- a\n  - b⟦⟧');
+assert.equal(edit('- a\n  - b⟦⟧', mdIndent, true), '- a\n- b⟦⟧');
+assert.equal(edit('plain⟦⟧', mdIndent, false), null);
+assert.equal(edit('```\nx⟦⟧', mdIndent, false), '```\nx  ⟦⟧');
+assert.equal(edit('see ⟦docs⟧ here', mdLink), 'see [docs](⟦https://⟧) here');
+assert.equal(edit('see ⟦docs⟧ here', mdLink, 'https://a.io'), 'see [docs](https://a.io)⟦⟧ here');
+assert.equal(edit('text⟦⟧', mdBlock, 'ts', 'const a = 1;'), 'text\n```ts\n⟦const a = 1;⟧\n```\n');
 
 // Tour: a.ts has 2 hunks, b.ts 1, plus a test, a lockfile and a binary.
 const tf = parseDiff(`diff --git a/a.ts b/a.ts
