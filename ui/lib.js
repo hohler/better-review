@@ -300,6 +300,42 @@ export function mdBlock(v, s, e, lang = '', code) {
   return { from: s, to: e, text: `${open}${body}\n\`\`\`\n`, start: s + open.length, end: s + open.length + body.length };
 }
 
+// Symbols defined inside the PR's diff, so a use can link to its definition. Found by pattern, not by parsing:
+// functions, classes and types in the common languages, exported constants, and local constants holding a function.
+// ponytail: class methods and anything defined outside the shown hunks are not found; a language server would be the upgrade.
+const NAME = '([A-Za-z_$][\\w$]*)';
+const DEFS = [
+  [new RegExp(`\\b(?:async\\s+)?function\\s*\\*?\\s*${NAME}\\s*[(<]`), false],
+  [new RegExp(`\\b(?:class|interface|enum|struct|trait|type)\\s+${NAME}`), false],
+  [new RegExp(`\\b(?:def|fn|fun|func)\\s+(?:\\([^)]*\\)\\s*)?${NAME}\\s*[(<]`), false],
+  [new RegExp(`\\bexport\\s+(?:const|let|var)\\s+${NAME}`), false],
+  // A local constant holding a function is only linked inside its own file: names like "handle" repeat across files.
+  [new RegExp(`\\b(?:const|let|var)\\s+${NAME}\\s*(?::[^=]+)?=\\s*(?:async\\s*)?(?:function\\b|\\(|[\\w$]+\\s*=>|<)`), true],
+];
+export function symbolIndex(files) {
+  const defs = new Map();
+  for (const f of files) {
+    if (GENERATED.test(f.path)) continue;
+    for (const hunk of f.hunks) {
+      for (const l of hunk.lines) {
+        if (l.t === '-' || l.n == null) continue;
+        const hit = DEFS.map(([re, local]) => [re.exec(l.text), local]).find(([m]) => m);
+        if (!hit || hit[0][1].length < 3) continue;
+        const list = defs.get(hit[0][1]) ?? defs.set(hit[0][1], []).get(hit[0][1]);
+        list.push({ path: f.path, line: l.n, local: hit[1] });
+      }
+    }
+  }
+  const names = [...defs.keys()].sort((a, b) => b.length - a.length).map((n) => n.replace(/\$/g, '\\$'));
+  // Not after a dot: obj.save() is a method, not the function save defined in this PR.
+  return { defs, pattern: names.length ? new RegExp(`(?<![.\\w$])(?:${names.join('|')})(?![\\w$])`, 'g') : null };
+}
+// Where a use of name at path:line leads: a definition in the same file first, else one elsewhere. Never to itself.
+export function symbolTarget(index, name, path, line) {
+  const list = (index.defs.get(name) ?? []).filter((d) => !(d.path === path && d.line === line));
+  return list.find((d) => d.path === path) ?? list.find((d) => !d.local) ?? null;
+}
+
 // Tour: every hunk of a regular source file gets an id (H1, H2, ...) that the LLM uses to build its stops.
 const isCore = (f) => !GENERATED.test(f.path) && !TEST.test(f.path);
 export function tourHunks(files) {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { GENERATED, TEST, markdown, inline, mdTokens, mdWrap, mdPrefix, mdEnter, mdIndent, mdLink, mdBlock, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './ui/lib.js';
+import { GENERATED, TEST, markdown, inline, mdTokens, symbolIndex, symbolTarget, mdWrap, mdPrefix, mdEnter, mdIndent, mdLink, mdBlock, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './ui/lib.js';
 
 const diff = `✓ Workspace loaded.
 diff --git a/src/a.ts b/src/a.ts
@@ -129,6 +129,20 @@ assert.equal(edit('```\nx⟦⟧', mdIndent, false), '```\nx  ⟦⟧');
 assert.equal(edit('see ⟦docs⟧ here', mdLink), 'see [docs](⟦https://⟧) here');
 assert.equal(edit('see ⟦docs⟧ here', mdLink, 'https://a.io'), 'see [docs](https://a.io)⟦⟧ here');
 assert.equal(edit('text⟦⟧', mdBlock, 'ts', 'const a = 1;'), 'text\n```ts\n⟦const a = 1;⟧\n```\n');
+
+// Symbols: definitions inside the diff, and where a use leads.
+const sfile = (path, lines) => ({ path, hunks: [{ lines: lines.map((text, i) => ({ t: text.startsWith('-') ? '-' : '+', n: text.startsWith('-') ? null : i + 1, text })) }] });
+const sym = symbolIndex([
+  sfile('src/card.ts', ['export function applyGiftCard(total: number) {', '  const fmt = (n) => n;', '  return isExpired(card) ? 0 : fmt(total);', '}', 'export const cardAtom = atom(null);', 'class GiftCardError extends Error {}', '- function removed() {}']),
+  sfile('src/use.ts', ['const fmt = (x) => x;', 'const total = applyGiftCard(1) + obj.applyGiftCard(2);', 'def lookup_card(code):', 'fn parse_code(s: &str) {}']),
+  sfile('pnpm-lock.yaml', ['function ignored() {}']),
+]);
+assert.deepEqual([...sym.defs.keys()].sort(), ['GiftCardError', 'applyGiftCard', 'cardAtom', 'fmt', 'lookup_card', 'parse_code']);
+assert.deepEqual('applyGiftCard(1) + obj.applyGiftCard(2) + cardAtoms'.match(sym.pattern), ['applyGiftCard']);
+assert.deepEqual(symbolTarget(sym, 'applyGiftCard', 'src/use.ts', 2), { path: 'src/card.ts', line: 1, local: false });
+assert.equal(symbolTarget(sym, 'applyGiftCard', 'src/card.ts', 1), null);
+assert.deepEqual(symbolTarget(sym, 'fmt', 'src/use.ts', 2), { path: 'src/use.ts', line: 1, local: true });
+assert.equal(symbolTarget(symbolIndex([sfile('a.ts', ['const run = () => 1;']), sfile('b.ts', ['run();'])]), 'run', 'b.ts', 1), null);
 
 // Tour: a.ts has 2 hunks, b.ts 1, plus a test, a lockfile and a binary.
 const tf = parseDiff(`diff --git a/a.ts b/a.ts

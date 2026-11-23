@@ -1,4 +1,4 @@
-import { GENERATED, TEST, markdown, mdTokens, mdWrap, mdPrefix, mdEnter, mdIndent, mdLink, mdBlock, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './lib.js';
+import { GENERATED, TEST, markdown, symbolIndex, symbolTarget, mdTokens, mdWrap, mdPrefix, mdEnter, mdIndent, mdLink, mdBlock, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './lib.js';
 
 const { invoke } = window.__TAURI__.core;
 const side = document.getElementById('side');
@@ -540,6 +540,40 @@ const icon = (name) => {
 
 // hidden: null (show diff) or the reason shown in the placeholder, e.g. "Test files".
 // only: optional Set of hunks, to show just a part of the file (tour stops).
+// Turns each use of a symbol defined in this PR into a link to its definition. Comments and strings are left alone.
+function linkSymbols(cell, path, line, index) {
+  const texts = [];
+  for (const w = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT); w.nextNode(); ) if (!w.currentNode.parentElement.closest('.hljs-comment, .hljs-string')) texts.push(w.currentNode);
+  for (const node of texts) {
+    const parts = [];
+    let last = 0;
+    for (const m of node.data.matchAll(index.pattern)) {
+      const target = symbolTarget(index, m[0], path, line);
+      if (!target) continue;
+      parts.push(node.data.slice(last, m.index), h('a', { className: 'sym', title: `Go to definition: ${target.path}:${target.line}`, textContent: m[0], onclick: (e) => (e.stopPropagation(), goToLine(target)) }));
+      last = m.index + m[0].length;
+    }
+    if (parts.length) node.replaceWith(...parts.flat(), node.data.slice(last));
+  }
+}
+
+// Opens the file if needed, scrolls the line to the middle and marks it for a moment. "Back" returns to where you were.
+function goToLine({ path, line }) {
+  const card = document.getElementById(`f-${path}`);
+  if (!card) return;
+  const from = main.scrollTop;
+  if (card.querySelector(':scope > .body[hidden], .placeholder')) card.show();
+  const row = card.querySelector(`tr[data-n="${line}"]`);
+  if (!row) return card.scrollIntoView({ block: 'start' });
+  row.scrollIntoView({ block: 'center' });
+  row.classList.add('flash');
+  setTimeout(() => row.classList.remove('flash'), 1600);
+  document.querySelector('.backchip')?.remove();
+  const chip = h('button', { className: 'backchip', textContent: '↩ Back', title: 'Back to where you were', onclick: () => ((main.scrollTop = from), chip.remove()) });
+  document.body.append(chip);
+  setTimeout(() => chip.remove(), 20000);
+}
+
 function fileEl(f, hidden, ctx, only) {
   const { comments, post, reviewed, toggle } = ctx;
   const roots = comments.filter((c) => !c.parent && c.inline?.path === f.path);
@@ -618,6 +652,8 @@ function fileEl(f, hidden, ctx, only) {
           row.after(tr);
         };
         const code = highlight(h('td', { className: 'code' }), l.text, lang);
+        if (l.n != null) row.dataset.n = l.n;
+        if (ctx.symbols?.pattern && l.t !== '-') linkSymbols(code, f.path, l.n, ctx.symbols);
         row.append(h('td', { className: 'no', textContent: l.n ?? '−', title: 'Comment on this line', onclick: start }), code);
         tbody.append(row);
         const here = roots.filter((c) => !placed.has(c) && (c.inline.to != null ? l.n === c.inline.to : l.t !== '+' && l.o === c.inline.from));
@@ -711,7 +747,7 @@ function draw(repo, id, data, guide) {
     }
     return fileCache.get(k);
   };
-  const ctx = { comments, post, reviewed, toggle, fileLines };
+  const ctx = { comments, post, reviewed, toggle, fileLines, symbols: symbolIndex(files) };
   const generated = new Set(g.generated);
   const why = (p) => (generated.has(p) ? 'Generated files' : TEST.test(p) ? 'Test files' : byPath[p].added + byPath[p].removed > 1500 ? 'Large diffs' : null);
   const card = (p) => fileEl(byPath[p], why(p), ctx);
@@ -771,7 +807,8 @@ function draw(repo, id, data, guide) {
       draw(repo, id, data, guide);
     };
     tourNav = (d) => go(i + d, d > 0);
-    const tctx = { ...ctx, tour: true };
+    // No symbol links in the tour: a stop shows parts of files, so a target is often not on screen.
+    const tctx = { ...ctx, tour: true, symbols: null };
     const s = t.stops[i - 1];
     const body =
       i === 0
