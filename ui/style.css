@@ -260,9 +260,10 @@ dialog.settings select { padding: 6px 8px; border: 1px solid var(--line); border
 /* The field and its styled copy share every metric, so each character sits exactly on its formatted twin. */
 .ed .pad { position: relative; }
 .ed textarea, .ed .mirror { display: block; width: 100%; min-height: 84px; margin: 0; padding: 10px 12px; border: 0; font: 12px/1.6 var(--mono); letter-spacing: 0; tab-size: 2; white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; }
-.ed textarea { position: relative; outline: 0; background: none; resize: none; overflow: hidden; color: transparent; caret-color: var(--text); }
-.ed textarea::placeholder { color: var(--muted); }
-.ed textarea::selection { color: transparent; background: color-mix(in srgb, var(--accent) 30%, transparent); }
+/* The typed text is hidden through its fill, not its colour: WebKit draws no cursor for text whose colour is transparent. */
+.ed textarea { position: relative; outline: 0; background: none; resize: none; overflow: hidden; color: var(--text); -webkit-text-fill-color: transparent; caret-color: var(--text); }
+.ed textarea::placeholder { color: var(--muted); -webkit-text-fill-color: var(--muted); }
+.ed textarea::selection { -webkit-text-fill-color: transparent; background: color-mix(in srgb, var(--accent) 30%, transparent); }
 .ed .mirror { position: absolute; inset: 0; pointer-events: none; color: var(--text); overflow: hidden; }
 /* Only styles that keep every glyph's width: weight, slant, colour, lines and backgrounds. No padding, no sizes. */
 .mirror .mk, .mirror .fence, .mirror .u { color: var(--muted); opacity: .7; }
