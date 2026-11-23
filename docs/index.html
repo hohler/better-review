@@ -51,9 +51,9 @@
   .theme:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 
   /* The headline is a diff: the old way of reviewing removed, the new way added. */
-  .diff { margin: clamp(1.5rem, 5vw, 4rem) 0 0; border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; background: var(--sheet); font: 600 clamp(1.05rem, 0.7rem + 1.9vw, 2.05rem)/1.35 var(--mono); letter-spacing: -0.02em; }
+  .diff { margin: clamp(1.5rem, 5vw, 4rem) 0 0; border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; background: var(--sheet); font: 600 clamp(0.875rem, 0.8rem + 0.35vw, 1.125rem)/1.45 var(--mono); letter-spacing: -0.02em; }
   .diff span, .diff del, .diff ins { display: block; padding: 0.42em 1em 0.42em 3.1em; text-indent: -1.6em; text-decoration: none; }
-  .diff .hunk { color: var(--soft); font-weight: 400; font-size: 0.62em; padding-block: 0.9em; text-indent: 0; padding-left: 1.5em; border-bottom: 1px solid var(--rule); }
+  .diff .hunk { color: var(--soft); font-weight: 400; font-size: 0.8em; padding-block: 0.9em; text-indent: 0; padding-left: 1.5em; border-bottom: 1px solid var(--rule); }
   .diff del { background: var(--del); color: var(--del-ink); font-weight: 400; }
   .diff ins { background: var(--add); color: var(--add-ink); }
   .diff del::before, .diff ins::before { display: inline-block; width: 1.6em; text-indent: 0; }
