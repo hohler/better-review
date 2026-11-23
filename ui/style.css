@@ -312,7 +312,7 @@ button.ask.on { font-weight: 600; }
 /* A use of a symbol defined in this PR: looks like code until hovered, then like a link. */
 td.code a.sym { color: inherit; text-decoration: underline dotted; text-decoration-color: color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: 3px; }
 td.code a.sym:hover { color: var(--accent); text-decoration: underline; }
-tr.flash td { animation: flash 1.6s ease-out; }
+tr.flash td { animation: flash 3.2s ease-out; }
 @keyframes flash { from { background: color-mix(in srgb, var(--amber) 45%, transparent); } to { background: transparent; } }
 .backchip { position: fixed; right: 28px; bottom: 24px; z-index: 6; padding: 6px 14px; border-radius: 99px; background: var(--text); color: var(--bg); border-color: var(--text); box-shadow: 0 8px 24px rgb(0 0 0 / .2); }
 

@@ -566,7 +566,7 @@ function flashLine({ path, line }) {
   if (!row) return false;
   row.scrollIntoView({ block: 'center' });
   row.classList.add('flash');
-  setTimeout(() => row.classList.remove('flash'), 1600);
+  setTimeout(() => row.classList.remove('flash'), 3200);
   return true;
 }
 // One floating button that undoes the last jump.
