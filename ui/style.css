@@ -1,24 +1,29 @@
 :root {
+  /* Waypoint: a review is a route with stops. Teal marks links and what is done, amber where you are and the next step. */
   color-scheme: light dark;
-  --bg: light-dark(#fff, #1b1c1f);
-  --page: light-dark(#f4f4f5, #101113);
-  --panel: light-dark(#f6f6f7, #17181b);
-  --line: light-dark(#e3e3e6, #2a2b30);
-  --text: light-dark(#1b1c1f, #e6e6e9);
-  --muted: light-dark(#6b6f76, #8a8f98);
-  --accent: #5e6ad2;
-  --add: light-dark(#e6f6ea, #12301c);
-  --del: light-dark(#fdeaea, #3a1719);
+  --bg: light-dark(#ffffff, #16202e);
+  --page: light-dark(#f0f3f8, #0d1521);
+  --panel: light-dark(#ffffff, #1b273a);
+  --side: light-dark(#e6ebf3, #0a111b);
+  --line: light-dark(#d9e0eb, #27354b);
+  --text: light-dark(#0f1b2d, #e6ecf5);
+  --muted: light-dark(#5a6a82, #8fa0b8);
+  --accent: light-dark(#0b7480, #58d0da);
+  --amber: #ffb224;
+  --on-amber: #0f1b2d;
+  --add: light-dark(#e2f5ec, #12301f);
+  --del: light-dark(#fde8e6, #3a1a1a);
   --green: light-dark(#1a7f37, #4cc38a);
   --red: light-dark(#c62828, #f2777a);
-  --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --sans: 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
-body { margin: 0; display: flex; height: 100vh; font: 13px/1.5 -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); }
+body { margin: 0; display: flex; height: 100vh; font: 13px/1.5 var(--sans); background: var(--bg); color: var(--text); }
 button, input, textarea { font: inherit; color: inherit; }
-button { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+button { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 3px 10px; cursor: pointer; }
 button:hover { border-color: var(--muted); }
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary { background: var(--amber); border-color: var(--amber); color: var(--on-amber); font-weight: 600; }
 button.on { border-color: var(--green); color: var(--green); }
 button.on.warn { border-color: var(--red); color: var(--red); }
 button:disabled { opacity: .5; cursor: default; }
@@ -26,13 +31,15 @@ button:disabled { opacity: .5; cursor: default; }
 .error { color: var(--red); white-space: pre-wrap; }
 a { color: var(--accent); cursor: pointer; text-decoration: none; }
 
-#side { width: 290px; flex: none; overflow-y: auto; background: var(--panel); border-right: 1px solid var(--line); padding: 10px; }
+#side { width: 290px; flex: none; overflow-y: auto; background: var(--side); border-right: 1px solid var(--line); padding: 10px; }
 #side header, #side h2 { display: flex; justify-content: space-between; align-items: center; }
 #side h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 18px 0 4px; }
 #side h2 button { border: 0; padding: 0 4px; }
 #side h3 { font-size: 12px; margin: 10px 0 2px; }
-#side .pr { display: block; padding: 5px 8px; border-radius: 6px; color: var(--text); }
-#side .pr:hover, #side .pr.active { background: var(--line); }
+#side .pr { display: block; padding: 5px 8px; border-radius: 8px; color: var(--text); }
+#side .pr:hover { background: var(--line); }
+/* The open pull request is the current stop: amber marker on the left. */
+#side .pr.active { background: var(--bg); box-shadow: inset 3px 0 var(--amber); }
 #side .pr span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #side form { margin-top: 18px; }
 #side input { width: 100%; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
@@ -42,11 +49,11 @@ a { color: var(--accent); cursor: pointer; text-decoration: none; }
 /* The toolbar stays put while scrolling; --bar is its height, which the sticky file headers and guide column sit below. */
 #main { --bar: 52px; }
 .top { display: flex; gap: 6px; align-items: center; height: var(--bar); margin: 0 -32px 18px; padding: 0 32px; position: sticky; top: 0; z-index: 4; background: var(--page); }
-.top button { border-radius: 99px; background: var(--bg); }
-.top button.primary { background: var(--accent); }
-.top .tab.active { background: var(--line); border-color: var(--line); }
+.top button { background: var(--bg); }
+.top button.primary { background: var(--amber); }
+.top .tab.active { background: var(--text); border-color: var(--text); color: var(--bg); }
 .grow { flex: 1; }
-h1 { font-size: 23px; font-weight: 600; margin: 0 0 6px; letter-spacing: -.01em; }
+h1 { font-size: 23px; font-weight: 700; margin: 0 0 6px; letter-spacing: -.01em; }
 .meta { color: var(--muted); margin: 0 0 36px; }
 .meta code { font-family: var(--mono); font-size: 12px; }
 .text { white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -56,8 +63,10 @@ h1 { font-size: 23px; font-weight: 600; margin: 0 0 6px; letter-spacing: -.01em;
 .guide { margin: 0 0 24px; }
 
 .step { display: flex; gap: 24px; align-items: flex-start; margin-bottom: 64px; }
-.step aside { width: 360px; flex: none; position: sticky; top: calc(var(--bar) + 4px); padding-bottom: 12px; }
-.step aside h2 { font-size: 19px; font-weight: 600; margin: 4px 0 6px; letter-spacing: -.01em; }
+/* Guide groups hang on a route line, each with a stop marker. */
+.step aside { width: 360px; flex: none; position: sticky; top: calc(var(--bar) + 4px); padding: 0 0 12px 22px; margin-left: 6px; border-left: 2px solid var(--line); }
+.step aside h2 { font-size: 19px; font-weight: 700; margin: 4px 0 6px; letter-spacing: -.01em; position: relative; }
+.step aside h2::before { content: ''; position: absolute; left: -31px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 0 4px var(--page); }
 .step aside p { font-size: 15px; line-height: 1.55; margin: 0 0 16px; }
 .count { display: flex; gap: 18px; align-items: center; color: var(--muted); font-variant-numeric: tabular-nums; margin-bottom: 26px; }
 .check { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); cursor: pointer; white-space: nowrap; }
@@ -73,12 +82,12 @@ h1 { font-size: 23px; font-weight: 600; margin: 0 0 6px; letter-spacing: -.01em;
 .cards { flex: 1; min-width: 0; }
 @media (max-width: 1150px) { .step { display: block; } .step aside { position: static; width: auto; margin-bottom: 12px; } }
 
-.file { background: var(--bg); border-radius: 8px; margin-bottom: 10px; overflow: clip; scroll-margin-top: calc(var(--bar) + 4px); }
+.file { background: var(--bg); border-radius: 12px; margin-bottom: 10px; overflow: clip; scroll-margin-top: calc(var(--bar) + 4px); }
 .file > header { display: flex; gap: 8px; align-items: center; padding: 9px 16px; cursor: pointer; position: sticky; top: calc(var(--bar) + 4px); z-index: 1; }
 /* Two layers behind the header: a page-coloured band hiding diff lines in the gap and corners, then the rounded card surface. */
 .file > header::before, .file > header::after { content: ''; position: absolute; z-index: -1; left: 0; right: 0; }
 .file > header::before { top: -12px; height: 20px; background: var(--page); }
-.file > header::after { top: 0; bottom: 0; background: var(--bg); border-radius: 8px 8px 0 0; }
+.file > header::after { top: 0; bottom: 0; background: var(--bg); border-radius: 12px 12px 0 0; }
 .file > header b { font-weight: 500; white-space: nowrap; }
 .file.done > header b, .file.done .dir { opacity: .5; }
 .tag { color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 0 8px; font-size: 11px; white-space: nowrap; }
@@ -96,8 +105,8 @@ tr.add { background: var(--add); }
 tr.add td.no { border-left-color: var(--green); color: var(--green); }
 tr.del { background: var(--del); }
 tr.del td.no { border-left-color: var(--red); color: var(--red); }
-tr.gap td { text-align: center; color: var(--muted); font-family: -apple-system, system-ui, sans-serif; padding: 6px 0; }
-tr.note td { padding: 8px 16px 8px 60px; font-family: -apple-system, system-ui, sans-serif; font-size: 13px; line-height: 1.5; white-space: normal; border-block: 1px solid var(--line); background: var(--bg); }
+tr.gap td { text-align: center; color: var(--muted); font-family: var(--sans); padding: 6px 0; }
+tr.note td { padding: 8px 16px 8px 60px; font-family: var(--sans); font-size: 13px; line-height: 1.5; white-space: normal; border-block: 1px solid var(--line); background: var(--bg); }
 
 .hljs-keyword, .hljs-built_in, .hljs-type, .hljs-selector-tag, .hljs-meta { color: light-dark(#a0328c, #d38fd0); }
 .hljs-title, .hljs-attr, .hljs-attribute, .hljs-variable, .hljs-property, .hljs-params, .hljs-selector-class, .hljs-name { color: light-dark(#2f5fc4, #86a8f0); }
@@ -113,7 +122,7 @@ form.comment textarea { width: 100%; min-height: 70px; padding: 6px 8px; border:
 form.comment div { display: flex; gap: 6px; margin-top: 4px; }
 
 #grip { width: 7px; margin: 0 -4px 0 -3px; flex: none; cursor: col-resize; z-index: 2; }
-#grip:hover, #grip:active { background: var(--accent); opacity: .35; }
+#grip:hover, #grip:active { background: var(--amber); opacity: .5; }
 
 .text code, .text pre { font-family: var(--mono); font-size: 12px; background: var(--page); border-radius: 4px; }
 .text code { padding: 1px 4px; }
@@ -125,7 +134,7 @@ form.comment div { display: flex; gap: 6px; margin-top: 4px; }
 
 .ficon { width: 16px; height: 16px; flex: none; display: inline-grid; place-items: center; }
 .ficon i { font-style: normal; grid-area: 1 / 1; }
-.ft { width: 16px; height: 16px; border-radius: 4px; color: #fff; font: 700 8px/16px -apple-system, system-ui, sans-serif; text-align: center; letter-spacing: -.02em; }
+.ft { width: 16px; height: 16px; border-radius: 4px; color: #fff; font: 700 8px/16px system-ui, sans-serif; text-align: center; letter-spacing: -.02em; }
 .chev { visibility: hidden; font-size: 17px; line-height: 16px; color: var(--muted); transform: rotate(90deg); transition: transform .12s; }
 .file > header:hover .ft { visibility: hidden; }
 .file > header:hover .chev { visibility: visible; }
@@ -137,16 +146,18 @@ td.no.plain { cursor: default; }
 td.no.plain:hover { color: var(--muted); }
 
 .tour { max-width: 1180px; }
-.tour h2 { font-size: 21px; font-weight: 600; margin: 0 0 10px; letter-spacing: -.01em; }
+.tour h2 { font-size: 21px; font-weight: 700; margin: 0 0 10px; letter-spacing: -.01em; }
 .tour h3 { font-size: 13px; margin: 26px 0 8px; }
 .tour .lead { margin-bottom: 14px; line-height: 1.6; }
 .tour .cards { margin-top: 20px; }
-.progress { display: flex; gap: 4px; align-items: center; margin-bottom: 26px; }
-.progress a { flex: 1; max-width: 46px; height: 5px; border-radius: 99px; background: var(--line); }
-.progress a.done { background: var(--green); opacity: .55; }
-.progress a.now { background: var(--accent); opacity: 1; }
+/* The tour bar is a route: a line with one stop per step, teal behind you, amber where you are. */
+.progress { display: flex; align-items: center; margin-bottom: 26px; }
+.progress a { flex: 1; max-width: 34px; height: 2px; background: var(--line); position: relative; margin-right: 12px; }
+.progress a::after { content: ''; position: absolute; right: -10px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+.progress a.done, .progress a.done::after, .progress a.now { background: var(--accent); }
+.progress a.now::after { background: var(--amber); box-shadow: 0 0 0 3px light-dark(#ffe6b3, #5a4310); }
 .progress span { margin-left: 10px; color: var(--muted); white-space: nowrap; }
-.checkbox { display: flex; gap: 8px; max-width: 820px; padding: 10px 14px; border-radius: 8px; background: light-dark(#fff7e6, #33290f); border: 1px solid light-dark(#f0d9a8, #5a4718); font-size: 14px; }
+.checkbox { display: flex; gap: 8px; max-width: 820px; padding: 10px 14px; border-radius: 10px; background: light-dark(#fff7e6, #33290f); border: 1px solid light-dark(#f0d9a8, #5a4718); font-size: 14px; }
 .checkbox b { white-space: nowrap; color: light-dark(#92600a, #f0c060); }
 .route { padding-left: 22px; font-size: 14px; line-height: 1.9; }
 .route li.done a { color: var(--muted); text-decoration: line-through; }
@@ -160,10 +171,10 @@ h1 a:hover { text-decoration: underline; }
 .spin b { font-weight: 600; }
 .spin small { display: block; }
 .spin .pct { color: var(--muted); font-variant-numeric: tabular-nums; }
-.ring { width: 22px; height: 22px; flex: none; border-radius: 50%; border: 2.5px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+.ring { width: 22px; height: 22px; flex: none; border-radius: 50%; border: 2.5px solid var(--line); border-top-color: var(--amber); animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin .bar { width: 260px; height: 4px; border-radius: 99px; background: var(--line); margin-top: 8px; overflow: hidden; }
-.spin .bar i { display: block; height: 100%; width: 0; border-radius: 99px; background: var(--accent); transition: width .4s; }
+.spin .bar i { display: block; height: 100%; width: 0; border-radius: 99px; background: var(--amber); transition: width .4s; }
 
 dialog.settings { width: 520px; max-width: calc(100vw - 40px); border: 1px solid var(--line); border-radius: 12px; padding: 22px 24px; background: var(--bg); color: var(--text); box-shadow: 0 20px 60px rgb(0 0 0 / .25); }
 dialog.settings::backdrop { background: rgb(0 0 0 / .35); }

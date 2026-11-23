@@ -12,19 +12,20 @@
   /* No web fonts and no scripts: the page makes no third-party requests. */
   :root {
     color-scheme: light dark;
-    --page: light-dark(#eeeff6, #111219);
-    --sheet: light-dark(#fbfbfe, #191a24);
-    --ink: light-dark(#1c1b3a, #e9e9f4);
-    --soft: light-dark(#5a5b78, #9fa0bd);
-    --rule: light-dark(#d5d6e6, #2c2d40);
-    --accent: light-dark(#4347c4, #8f93ff);
-    --on-accent: light-dark(#fff, #111219);
+    --page: light-dark(#f0f3f8, #0d1521);
+    --sheet: light-dark(#ffffff, #16202e);
+    --ink: light-dark(#0f1b2d, #e6ecf5);
+    --soft: light-dark(#5a6a82, #8fa0b8);
+    --rule: light-dark(#d9e0eb, #27354b);
+    --accent: light-dark(#0b7480, #58d0da);
+    --amber: #ffb224;
+    --on-amber: #0f1b2d;
     --add: light-dark(#d9f2e0, #12301e);
     --add-ink: light-dark(#17693f, #63d39a);
     --del: light-dark(#f9dede, #381a1d);
     --del-ink: light-dark(#a3302c, #f08a86);
     --mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
-    --sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --sans: 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
     --measure: 34rem;
   }
   * { box-sizing: border-box; }
@@ -52,7 +53,7 @@
   .lede { display: grid; grid-template-columns: minmax(0, var(--measure)) auto; gap: 2rem 4rem; align-items: start; justify-content: space-between; padding-block: clamp(2rem, 4vw, 3.5rem); }
   .lede p { margin: 0; font-size: 1.25rem; line-height: 1.5; }
   .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
-  .button { display: inline-block; padding: 0.8rem 1.25rem; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 600; text-decoration: none; }
+  .button { display: inline-block; padding: 0.8rem 1.25rem; border-radius: 8px; background: var(--amber); color: var(--on-amber); font-weight: 600; text-decoration: none; }
   .button.quiet { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
   .actions small { flex-basis: 100%; color: var(--soft); font-size: 0.875rem; }
 
@@ -64,14 +65,15 @@
   .stops > p { margin: 0; max-width: var(--measure); color: var(--soft); }
   .stop { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 8fr); gap: 1.5rem clamp(1.5rem, 4vw, 4rem); align-items: start; padding-block: clamp(2.5rem, 6vw, 5rem); border-bottom: 1px solid var(--rule); }
   .stop:last-child { border-bottom: 0; }
+  /* Same route as in the app: teal behind you, amber where you are. */
   .bar { display: flex; align-items: center; gap: 6px; margin: 0 0 1.25rem; font-size: 0.875rem; color: var(--soft); }
   .bar i { width: 2.25rem; height: 5px; border-radius: 3px; background: var(--rule); }
-  .bar i.done { background: var(--add-ink); }
-  .bar i.now { background: var(--accent); }
+  .bar i.done { background: var(--accent); }
+  .bar i.now { background: var(--amber); }
   .bar span { margin-left: 0.5rem; }
   .stop h3 { margin: 0 0 0.75rem; font-size: 1.625rem; line-height: 1.2; letter-spacing: -0.02em; }
   .stop p { margin: 0 0 1rem; max-width: var(--measure); }
-  .stop .check { margin: 1.25rem 0 0; padding: 0.85rem 1rem; border-left: 3px solid var(--accent); background: var(--sheet); font-size: 0.9375rem; }
+  .stop .check { margin: 1.25rem 0 0; padding: 0.85rem 1rem; border-left: 3px solid var(--amber); background: var(--sheet); font-size: 0.9375rem; }
 
   .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2rem clamp(1.5rem, 4vw, 4rem); padding-block: clamp(3rem, 7vw, 6rem); }
   .facts h2 { grid-column: 1 / -1; margin: 0; font-size: clamp(1.75rem, 1.2rem + 2vw, 2.75rem); line-height: 1.1; letter-spacing: -0.03em; }
