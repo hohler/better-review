@@ -141,5 +141,19 @@
     "path": "src/checkout/use-checkout.ts"
    }
   }
+ ],
+ "_statuses": [
+  {
+   "state": "SUCCESSFUL",
+   "name": "Pipeline - pullrequests: **",
+   "url": "https://bitbucket.org/acme/storefront/pipelines/results/1841",
+   "updated_on": "@-2h"
+  },
+  {
+   "state": "SUCCESSFUL",
+   "name": "Preview deployment",
+   "url": "https://bitbucket.org/acme/storefront/deployments",
+   "updated_on": "@-2h"
+  }
  ]
 }

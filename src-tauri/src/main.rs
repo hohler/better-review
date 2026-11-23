@@ -108,7 +108,7 @@ async fn inbox(workspace: String) -> Result<String, String> {
 #[tauri::command]
 async fn pr(repo: String, id: u64) -> Result<String, String> {
     slug(&repo, true)?;
-    bg(move || run("twg", &["bb", "prs", "get", &id.to_string(), "--repo", &repo, "--comments", "-o", "json"], None)).await
+    bg(move || run("twg", &["bb", "prs", "get", &id.to_string(), "--repo", &repo, "--comments", "--statuses", "-o", "json"], None)).await
 }
 
 #[tauri::command]
