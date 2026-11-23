@@ -61,6 +61,14 @@ addEventListener('load', async () => {
   if (shot === 'tour') {
     await find('.tournav');
     for (let i = 0; i < +(q.get('stop') ?? 1); i++) document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' })), await sleep(100);
+    // &sym=name opens the definition popover of the last use of that name in the stop.
+    if (q.get('sym')) {
+      await find('td.code a.sym', q.get('sym'));
+      const use = [...document.querySelectorAll('td.code a.sym')].filter((x) => x.textContent === q.get('sym')).at(-1);
+      use.scrollIntoView({ block: 'center' });
+      document.querySelector('#main').scrollBy(0, 150);
+      use.click();
+    }
   }
   if (shot === 'diff') {
     await sleep(300);

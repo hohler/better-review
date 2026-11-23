@@ -16,5 +16,10 @@ for theme in light dark; do
   done
 done
 rm -f "$out"/web-settings-*.png
+# The tour's definition popover, for the website.
+for theme in light dark; do
+  "$chrome" --headless=new --disable-gpu --hide-scrollbars --user-data-dir="$(mktemp -d)" --window-size=1280,820 --force-device-scale-factor=2 --virtual-time-budget=8000 --screenshot="$out/web-popover-$theme.png" "http://127.0.0.1:4718/docs/demo/#shot=tour&stop=3&sym=applyGiftCard&theme=$theme" >/dev/null 2>&1
+  echo "web-popover-$theme.png"
+done
 "$chrome" --headless=new --disable-gpu --hide-scrollbars --user-data-dir="$(mktemp -d)" --window-size=1600,1000 --force-device-scale-factor=2 --virtual-time-budget=3000 --screenshot="$out/hero.png" "http://127.0.0.1:4718/docs/demo/hero.html" >/dev/null 2>&1
 echo hero.png

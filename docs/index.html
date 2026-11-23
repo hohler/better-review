@@ -75,6 +75,7 @@
   .stops > p { margin: 0; max-width: var(--measure); color: var(--soft); }
   .stop { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 8fr); gap: 1.5rem clamp(1.5rem, 4vw, 4rem); align-items: start; padding-block: clamp(2.5rem, 6vw, 5rem); border-bottom: 1px solid var(--rule); }
   .stop:last-child { border-bottom: 0; }
+  .stops.follow { padding-top: 0; border-top: 1px solid var(--rule); }
   /* Same route as in the app: teal behind you, amber where you are. */
   .bar { display: flex; align-items: center; gap: 6px; margin: 0 0 1.25rem; font-size: 0.875rem; color: var(--soft); }
   .bar i { width: 2.25rem; height: 5px; border-radius: 3px; background: var(--rule); }
@@ -152,7 +153,8 @@
         <div>
           <p class="bar"><i class="now"></i><i></i><i></i><i></i><span>Stop 1 of 4</span></p>
           <h3>Start with the guide</h3>
-          <p>The guide sorts the changed files into groups by topic, core change first, tests and configuration last. Each group gets two or three sentences: what changes, why, and what to watch for.</p>
+          <p>The guide sorts the changed files into groups by topic, core change first, tests and configuration last. Each group gets a few short sentences: what changes, why, and what to check.</p>
+          <p>The texts are written in plain language: one idea per sentence, everyday words, and the names from the code.</p>
           <p>Lockfiles, snapshots and other generated files are set aside and stay collapsed. So do tests, until you want them.</p>
         </div>
         <picture class="shot">
@@ -199,6 +201,20 @@
         <picture class="shot">
           <source srcset="screenshots/web-overview-dark.png" media="(prefers-color-scheme: dark)">
           <img src="screenshots/web-overview-light.png" width="2560" height="1640" loading="lazy" alt="The overview of a pull request: description and discussion on the left, and a column with status, reviewers, builds, size and changed files on the right.">
+        </picture>
+      </article>
+    </section>
+
+    <section class="stops follow">
+      <article class="stop">
+        <div>
+          <h3>Follow a name to its definition</h3>
+          <p>When a function, class or type is defined in the same pull request, every use of it is a link. In the guide and the diff a click takes you to the definition, and one more click brings you back.</p>
+          <p>In the tour you stay where you are. The definition opens in a small card under the name, and tells you in which stop it belongs.</p>
+        </div>
+        <picture class="shot">
+          <source srcset="screenshots/web-popover-dark.png" media="(prefers-color-scheme: dark)">
+          <img src="screenshots/web-popover-light.png" width="2560" height="1640" loading="lazy" alt="A tour stop where a function name was clicked: a card under it shows the function's definition from another file, with buttons to go to its stop or open it in the diff.">
         </picture>
       </article>
     </section>
