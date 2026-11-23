@@ -302,10 +302,8 @@ form.comment .foot small { margin-left: auto; }
 .info .who .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 .info .who a.name:hover { color: var(--accent); text-decoration: underline; }
 .info .who small { white-space: nowrap; }
-/* Request changes: the "changes requested" amber, kept soft so Approve stays the one loud button. */
+/* Request changes: amber text and border on the normal button background, so Approve stays the one filled button. */
 :root { --warn: light-dark(#b45309, #f0a34a); }
-button.ask { color: var(--warn); background: color-mix(in srgb, var(--warn) 9%, var(--bg)); border-color: color-mix(in srgb, var(--warn) 30%, var(--line)); }
-button.ask:hover { border-color: var(--warn); }
-button.ask.on { background: color-mix(in srgb, var(--warn) 18%, var(--bg)); border-color: var(--warn); font-weight: 600; }
-.top button.ask { background: color-mix(in srgb, var(--warn) 9%, var(--bg)); }
-.top button.ask.on { background: color-mix(in srgb, var(--warn) 18%, var(--bg)); }
+button.ask { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, var(--line)); }
+button.ask:hover, button.ask.on { border-color: var(--warn); }
+button.ask.on { font-weight: 600; }
