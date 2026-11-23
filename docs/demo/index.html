@@ -25,6 +25,7 @@ window.__TAURI__ = {
   event: { listen: () => {} },
   core: {
     invoke: async (cmd, a) => {
+      if (q.get('slow')) await sleep(+q.get('slow')); // &slow=2000 imitates a slow connection
       if (cmd === 'installed') return { claude: true, copilot: true, twg: true };
       if (cmd === 'models') return [{ id: 'gpt-6-luna', name: 'GPT-6 Luna' }, { id: 'mai-code-2-flash', name: 'MAI Code 2 Flash' }];
       if (cmd === 'inbox') return fx('inbox.json');

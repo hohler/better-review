@@ -152,7 +152,23 @@ function loadTour(repo, id) {
   return tours.get(k);
 }
 
+let refreshing = false;
 async function refresh() {
+  if (refreshing) return;
+  refreshing = true;
+  renderSide();
+  try {
+    await refreshInbox();
+  } finally {
+    refreshing = false;
+    renderSide();
+  }
+  // ponytail: guides preload one at a time, raise to 2-3 in parallel if the queue gets long.
+  if (!preloadOn()) return;
+  for (const ws of workspaces) for (const i of inboxes[ws]?.items ?? []) await loadGuide(i.repo, i.id).catch(() => {});
+}
+
+async function refreshInbox() {
   await Promise.all(
     workspaces.map(async (ws) => {
       try {
@@ -172,14 +188,11 @@ async function refresh() {
   // Reload every PR for its real approval state, four at a time, before the slower guides.
   const all = workspaces.flatMap((ws) => inboxes[ws]?.items ?? []);
   for (let i = 0; i < all.length; i += 4) await Promise.all(all.slice(i, i + 4).map((p) => (key(p.repo, p.id) === current ? null : (prs.delete(key(p.repo, p.id)), loadPr(p.repo, p.id).catch(() => {})))));
-  // ponytail: guides preload one at a time, raise to 2-3 in parallel if the queue gets long.
-  if (!preloadOn()) return;
-  for (const ws of workspaces) for (const i of inboxes[ws]?.items ?? []) await loadGuide(i.repo, i.id).catch(() => {});
 }
 
 function renderSide() {
   set(side, 
-    h('header', {}, h('strong', { textContent: 'Reviews' }), h('span', {}, h('button', { textContent: '⚙', title: `Settings (${MOD}+,)`, onclick: () => openSettings(false) }), ' ', h('button', { textContent: '↻', title: 'Refresh', onclick: refresh }))),
+    h('header', {}, h('strong', { textContent: 'Reviews' }), refreshing && h('small', { className: 'refreshing', role: 'status', textContent: 'Refreshing…' }), h('span', {}, h('button', { textContent: '⚙', title: `Settings (${MOD}+,)`, onclick: () => openSettings(false) }), ' ', h('button', { className: refreshing ? 'busy' : '', disabled: refreshing, title: refreshing ? 'Refreshing…' : 'Refresh', onclick: refresh }, h('span', { textContent: '↻' })))),
     workspaces.map((ws) => {
       const items = inboxes[ws]?.items ?? [];
       const remove = () => {
