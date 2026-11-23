@@ -485,7 +485,7 @@ function infoEl(pr, files, reviewed, mine, openFile) {
     { className: 'info' },
     part('Status', h('div', { className: 'who' }, h('span', { textContent: pr.state === 'OPEN' || !pr.state ? 'Open' : pr.state[0] + pr.state.slice(1).toLowerCase() }), yours && h('span', { className: `tag ${yours[1]}`, textContent: yours[0] }))),
     people.length > 0 && part('Reviewers', people.map(person)),
-    part('Checks', builds.length ? builds.map(build) : h('div', { className: 'who muted', textContent: 'No builds for this pull request' })),
+    part('Builds', builds.length ? builds.map(build) : h('div', { className: 'who muted', textContent: 'No builds for this pull request' })),
     part('Changes', h('div', { className: 'who' }, h('span', { textContent: `${files.length} file${files.length === 1 ? '' : 's'}` }), h('span', { className: 'stats' }, h('span', { className: 'plus', textContent: `+${sum('added')}` }), ' ', h('span', { className: 'minus', textContent: `−${sum('removed')}` })))),
     part('Reviewed by you', h('div', { className: 'who' }, h('span', { textContent: `${done} of ${files.length} files` })), h('div', { className: 'meter' }, h('i', { style: `width:${files.length ? (done / files.length) * 100 : 0}%` }))),
     part('Updated', h('div', { className: 'who' }, h('span', { textContent: ago(pr.updated_on) }))),
