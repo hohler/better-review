@@ -195,7 +195,20 @@ function renderSide() {
     h('header', {}, h('strong', { textContent: 'Reviews' }), refreshing && h('small', { className: 'refreshing', role: 'status', textContent: 'Refreshing…' }), h('span', {}, h('button', { textContent: '⚙', title: `Settings (${MOD}+,)`, onclick: () => openSettings(false) }), ' ', h('button', { className: refreshing ? 'busy' : '', disabled: refreshing, title: refreshing ? 'Refreshing…' : 'Refresh', onclick: refresh }, h('span', { textContent: '↻' })))),
     workspaces.map((ws) => {
       const items = inboxes[ws]?.items ?? [];
-      const remove = () => {
+      // Two clicks, like unapprove and delete: the first arms the button for a few seconds.
+      const remove = (e) => {
+        const b = e.target;
+        if (!b.dataset.armed) {
+          b.dataset.armed = '1';
+          b.textContent = 'Remove?';
+          b.classList.add('warn');
+          setTimeout(() => {
+            delete b.dataset.armed;
+            b.textContent = '×';
+            b.classList.remove('warn');
+          }, 4000);
+          return;
+        }
         workspaces = workspaces.filter((w) => w !== ws);
         delete inboxes[ws];
         save('workspaces', workspaces);

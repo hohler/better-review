@@ -227,3 +227,4 @@ dialog.settings select { padding: 6px 8px; border: 1px solid var(--line); border
 #side header button > span { display: inline-block; }
 #side header button.busy > span { animation: spin 0.9s linear infinite; }
 #side header button.busy { opacity: 1; cursor: progress; }
+#side h2 button.warn { color: var(--red); font-weight: 600; text-transform: none; letter-spacing: 0; }
