@@ -84,6 +84,13 @@ const AGENTS = [
 ];
 let models = load('models', {}); // agent -> { guide, tour }, missing means the agent's default
 const modelFor = (kind, a = agent, chosen = models) => chosen[a]?.[kind] ?? AGENTS.find((x) => x.id === a)?.[kind];
+// Appearance: 'system' follows the OS, 'light' and 'dark' pin it. The stylesheet's light-dark() colours follow color-scheme.
+function applyTheme(theme = load('theme', 'system')) {
+  document.documentElement.style.colorScheme = theme === 'system' ? 'light dark' : theme;
+  // The native title bar follows too. Not available in a plain browser.
+  window.__TAURI__.window?.getCurrentWindow?.().setTheme(theme === 'system' ? null : theme).catch(() => {});
+}
+applyTheme();
 // Preloading costs one AI request per open PR, so it is opt-in.
 const preloadOn = () => load('preload', false);
 const errors = {};
@@ -878,6 +885,7 @@ async function openSettings(first) {
   const found = await invoke('installed').catch(() => ({}));
   let pick = agent ?? (found.copilot && !found.claude ? 'copilot' : 'claude');
   let pre = preloadOn();
+  let theme = load('theme', 'system');
   const chosen = structuredClone(models);
   const offered = Object.fromEntries(AGENTS.map((x) => [x.id, x.models]));
   const modelNote = h('small');
@@ -914,6 +922,8 @@ async function openSettings(first) {
     save('agent', agent);
     save('models', models);
     save('preload', pre);
+    save('theme', theme);
+    applyTheme(theme);
     save('workspaces', workspaces);
     dlg.close();
     dlg.remove();
@@ -950,6 +960,8 @@ async function openSettings(first) {
       h('div', { className: 'row' }, h('button', { type: 'button', textContent: 'Test this agent', onclick: test }), status),
       h('label', { className: 'check' }, h('input', { type: 'checkbox', checked: pre, onchange: (e) => (pre = e.target.checked) }), 'Prepare guides for all pull requests in the background'),
       h('small', { textContent: 'One AI request per open pull request. If off, a guide is written when you open the pull request.' }),
+      h('h3', { textContent: 'Appearance' }),
+      h('div', { className: 'models' }, h('label', {}, 'Theme', h('select', { onchange: (e) => (theme = e.target.value) }, [['system', 'Same as system'], ['light', 'Light'], ['dark', 'Dark']].map(([value, textContent]) => h('option', { value, textContent, selected: value === theme }))))),
       first && [h('h3', { textContent: 'Bitbucket workspace' }), wsInput, found.twg === false && h('p', { className: 'error', textContent: 'The twg CLI was not found. Better Review needs it to read Bitbucket.' })],
       problem,
       h('div', { className: 'row end' }, !first && h('button', { type: 'button', textContent: 'Cancel', onclick: () => (dlg.close(), dlg.remove()) }), h('button', { type: 'button', className: 'primary', textContent: first ? 'Start reviewing' : 'Save', onclick: done })),

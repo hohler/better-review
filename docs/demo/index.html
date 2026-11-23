@@ -11,8 +11,8 @@
 // The real interface on invented data, for screenshots. Nothing here talks to Bitbucket or an AI agent.
 // Serve the repository root and open /docs/demo/#shot=guide&theme=dark (shots: overview, guide, tour, diff, settings).
 const q = new URLSearchParams(location.hash.slice(1));
-if (q.get('theme')) document.documentElement.style.colorScheme = q.get('theme');
 localStorage.clear();
+if (q.get('theme')) localStorage.setItem('theme', JSON.stringify(q.get('theme')));
 localStorage.setItem('agent', '"claude"');
 localStorage.setItem('workspaces', '["acme"]');
 
