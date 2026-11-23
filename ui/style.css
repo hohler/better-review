@@ -257,9 +257,22 @@ dialog.settings select { padding: 6px 8px; border: 1px solid var(--line); border
 .ed .bar button.mono { font-family: var(--mono); font-size: 12px; }
 .ed .bar .sep { width: 1px; height: 16px; background: var(--line); margin: 0 5px; }
 .ed .bar small { font-size: 11px; margin-right: 6px; }
-.ed textarea { display: block; width: 100%; min-height: 84px; max-height: 60vh; padding: 10px 12px; border: 0; outline: 0; background: none; resize: none; font-family: var(--mono); font-size: 12px; line-height: 1.6; tab-size: 2; }
-.ed .live { border-top: 1px dashed var(--line); padding: 10px 12px 12px; }
-.ed .live[hidden] { display: none; }
-.ed .live > small { display: block; margin-bottom: 6px; font-size: 11px; }
+/* The field and its styled copy share every metric, so each character sits exactly on its formatted twin. */
+.ed .pad { position: relative; }
+.ed textarea, .ed .mirror { display: block; width: 100%; min-height: 84px; margin: 0; padding: 10px 12px; border: 0; font: 12px/1.6 var(--mono); letter-spacing: 0; tab-size: 2; white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; }
+.ed textarea { position: relative; outline: 0; background: none; resize: none; overflow: hidden; color: transparent; caret-color: var(--text); }
+.ed textarea::placeholder { color: var(--muted); }
+.ed textarea::selection { color: transparent; background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.ed .mirror { position: absolute; inset: 0; pointer-events: none; color: var(--text); overflow: hidden; }
+/* Only styles that keep every glyph's width: weight, slant, colour, lines and backgrounds. No padding, no sizes. */
+.mirror .mk, .mirror .fence, .mirror .u { color: var(--muted); opacity: .7; }
+.mirror .b { font-weight: 700; }
+.mirror .i { font-style: italic; }
+.mirror .s { text-decoration: line-through; color: var(--muted); }
+.mirror .c, .mirror .cb { background: var(--page); border-radius: 3px; }
+.mirror .a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.mirror .h { font-weight: 700; color: var(--accent); }
+.mirror .q { color: var(--muted); font-style: italic; }
+.mirror .li, .mirror .task { color: var(--accent); font-weight: 700; }
 form.comment .foot { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
 form.comment .foot small { margin-left: auto; }

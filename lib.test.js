@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { GENERATED, TEST, markdown, inline, mdWrap, mdPrefix, mdEnter, mdIndent, mdLink, mdBlock, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './ui/lib.js';
+import { GENERATED, TEST, markdown, inline, mdTokens, mdWrap, mdPrefix, mdEnter, mdIndent, mdLink, mdBlock, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './ui/lib.js';
 
 const diff = `✓ Workspace loaded.
 diff --git a/src/a.ts b/src/a.ts
@@ -93,6 +93,12 @@ assert.deepEqual(inline('see [docs](https://a.io/x) and https://b.io/y. not [bad
   { t: 's', kids: [T('no')] },
   T(' *raw*'),
 ]);
+
+// In-place formatting: the tokens must reproduce the text exactly, whatever is typed.
+const sample = '# Title\n\nSome **bold**, _it_, ~~no~~, `code` and [docs](https://a.io "t") https://b.io.\n- [ ] task \\*raw\n  2) two\n> quote\n---\n```ts\nconst a = `x`;\n```\nunclosed **bold and `tick\n```\nopen fence';
+assert.equal(mdTokens(sample).map((k) => k.text).join(''), sample);
+assert.deepEqual(mdTokens('a **b** `c`'), [{ text: 'a ', cls: '' }, { text: '**', cls: 'mk' }, { text: 'b', cls: 'b' }, { text: '**', cls: 'mk' }, { text: ' ', cls: '' }, { text: '`', cls: 'mk' }, { text: 'c', cls: 'c' }, { text: '`', cls: 'mk' }]);
+assert.deepEqual(mdTokens('- [x] go\n```js\nlet a;').map((k) => k.cls), ['li', 'task', '', '', 'fence', '', 'cb']);
 
 // Editor helpers: apply the edit, mark the selection with ⟦ ⟧.
 const edit = (text, fn, ...args) => {

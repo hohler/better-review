@@ -190,6 +190,49 @@ function blocks(lines) {
 
 export const markdown = (raw) => blocks((raw ?? '').replace(/\r\n?/g, '\n').split('\n'));
 
+// Tokens for showing markdown formatted inside the text field itself. Every character of the input is kept, in order,
+// so the styled copy lines up with what is typed. Classes: mk marker, b, i, s, c code, a link text, u url, h heading,
+// q quote, li list marker, task, fence, cb code block line (with lang).
+export function mdTokens(text) {
+  const out = [];
+  const push = (t, cls = '', extra) => t && out.push({ text: t, cls, ...extra });
+  const spans = (line) => {
+    let last = 0;
+    for (const m of line.matchAll(INLINE)) {
+      push(line.slice(last, m.index));
+      last = m.index + m[0].length;
+      const around = (n, cls) => (push(m[0].slice(0, n), 'mk'), push(m[0].slice(n, -n), cls), push(m[0].slice(-n), 'mk'));
+      if (m[2] != null) around(m[1].length, 'c');
+      else if (m[4] != null || m[6] != null) {
+        const open = m[4] != null ? '![' : '[';
+        const label = m[4] != null ? m[3] : m[5];
+        push(open, 'mk'), push(label, 'a'), push('](', 'mk'), push(m[0].slice(open.length + label.length + 2, -1), 'u'), push(')', 'mk');
+      } else if (m[7] != null) around(1, 'a');
+      else if (m[8] != null) push(m[0], 'a');
+      else if (m[14] != null) push('\\', 'mk'), push(m[14]);
+      else if (m[9] != null || m[10] != null) around(2, 'b');
+      else if (m[11] != null) around(2, 's');
+      else around(1, 'i');
+    }
+    push(line.slice(last));
+  };
+  let fence = null;
+  text.split('\n').forEach((line, n) => {
+    if (n) push('\n');
+    let m;
+    if (fence) {
+      if (line.trim().startsWith(fence.mark)) (push(line, 'fence'), (fence = null));
+      else push(line, 'cb', { lang: fence.lang });
+    } else if ((m = FENCE.exec(line))) (push(line, 'fence'), (fence = { mark: m[1], lang: m[2] }));
+    else if ((m = /^(\s{0,3}#{1,6}\s+)(.*)$/.exec(line))) push(m[1], 'mk'), push(m[2], 'h');
+    else if (RULE.test(line)) push(line, 'mk');
+    else if ((m = /^(\s*>\s?)(.*)$/.exec(line))) push(m[1], 'mk'), push(m[2], 'q');
+    else if ((m = /^(\s*(?:[-*+]|\d+[.)])\s+)(\[[ xX]\]\s+)?(.*)$/.exec(line))) push(m[1], 'li'), push(m[2], 'task'), spans(m[3]);
+    else spans(line);
+  });
+  return out;
+}
+
 // Editing helpers for the markdown comment field. Each takes the text and selection and returns one edit:
 // replace [from, to) with text, then select [start, end). They return null when they do not apply.
 const lineSpan = (v, s, e) => [v.lastIndexOf('\n', s - 1) + 1, v.indexOf('\n', e) < 0 ? v.length : v.indexOf('\n', e)];

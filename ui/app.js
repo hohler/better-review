@@ -1,4 +1,4 @@
-import { GENERATED, TEST, markdown, mdWrap, mdPrefix, mdEnter, mdIndent, mdLink, mdBlock, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './lib.js';
+import { GENERATED, TEST, markdown, mdTokens, mdWrap, mdPrefix, mdEnter, mdIndent, mdLink, mdBlock, tourHunks, tourInput, normalizeTour, parseDiff, normalizeGuide, guideInput } from './lib.js';
 
 const { invoke } = window.__TAURI__.core;
 const side = document.getElementById('side');
@@ -308,18 +308,19 @@ function reload(repo, id) {
 
 // A plain-text Markdown editor with the two things reviews need: code insertion and a preview of how it will render.
 // opts: value (prefill when editing), label (submit button), lang (language for new code blocks, e.g. the file's extension).
-// The comment editor: a markdown text field with a toolbar, shortcuts, list editing and a live preview below it.
+// The comment editor: a markdown text field with a toolbar, shortcuts and list editing. The text is shown formatted
+// in place: a styled copy lies exactly behind the field, whose own text is transparent. Markers stay, only dimmed.
 // quote: the code of the line being commented on, offered as "Quote line".
 function commentForm(send, onCancel, { value = '', label = 'Comment', lang = '', quote } = {}) {
   const area = h('textarea', { placeholder: 'Write a comment. Markdown works.', value, rows: 3 });
-  const live = h('div', { className: 'live', hidden: true });
+  const mirror = h('pre', { className: 'mirror', ariaHidden: 'true' });
   const err = h('p', { className: 'error' });
   const btn = h('button', { className: 'primary', textContent: label });
   const refresh = () => {
+    // The trailing space gives a last empty line its height in the copy.
+    set(mirror, mdTokens(area.value).map((k) => (k.cls === 'cb' ? highlight(h('span', { className: 'cb' }), k.text, k.lang) : k.cls ? h('span', { className: k.cls, textContent: k.text }) : k.text)), ' ');
     area.style.height = 'auto';
     area.style.height = `${area.scrollHeight}px`;
-    live.hidden = !area.value.trim();
-    if (!live.hidden) set(live, h('small', { textContent: 'Preview' }), rich(area.value));
   };
   // Edits go through insertText so that undo keeps working; setRangeText is the fallback.
   const apply = (r) => {
@@ -368,7 +369,7 @@ function commentForm(send, onCancel, { value = '', label = 'Comment', lang = '',
   const form = h(
     'form',
     { className: 'comment' },
-    h('div', { className: 'ed' }, bar, area, live),
+    h('div', { className: 'ed' }, bar, h('div', { className: 'pad' }, mirror, area)),
     h('div', { className: 'foot' }, btn, later, onCancel && h('button', { type: 'button', textContent: 'Cancel', onclick: onCancel }), h('small', { textContent: `${MOD}+Enter to send` })),
     err,
   );
