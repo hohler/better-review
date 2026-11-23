@@ -2,7 +2,7 @@
 
 Guided pull request reviews for Bitbucket, as a desktop app for macOS and Windows (Tauri).
 
-Website: https://hohler.github.io/better-review/
+Website: https://betterreview.app/
 
 ![Better Review showing the guide for a pull request](docs/screenshots/hero.png)
 
