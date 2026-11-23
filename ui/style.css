@@ -38,8 +38,7 @@ a { color: var(--accent); cursor: pointer; text-decoration: none; }
 #side h3 { font-size: 12px; margin: 10px 0 2px; }
 #side .pr { display: block; padding: 5px 8px; border-radius: 8px; color: var(--text); }
 #side .pr:hover { background: var(--line); }
-/* The open pull request is the current stop: amber marker on the left. */
-#side .pr.active { background: var(--bg); box-shadow: inset 3px 0 var(--amber); }
+#side .pr.active { background: var(--bg); }
 #side .pr span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #side form { margin-top: 18px; }
 #side input { width: 100%; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
