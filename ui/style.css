@@ -47,8 +47,11 @@ a { color: var(--accent); cursor: pointer; text-decoration: none; }
 #main { flex: 1; overflow-y: auto; padding: 0 32px 120px; min-width: 0; background: var(--page); }
 /* The toolbar stays put while scrolling; --bar is its height, which the sticky file headers and guide column sit below. */
 #main { --bar: 52px; }
-.top { display: flex; gap: 6px; align-items: center; height: var(--bar); margin: 0 -32px 18px; padding: 0 32px; position: sticky; top: 0; z-index: 4; background: var(--page); }
-.top button { background: var(--bg); }
+/* Tabs on the left, actions on the right. Too narrow for one line: the actions move below, buttons never break inside. */
+.top { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 52px; margin: 0 -32px 18px; padding: 10px 32px; position: sticky; top: 0; z-index: 4; background: var(--page); }
+.top .tabs, .top .acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.top .acts { margin-left: auto; justify-content: flex-end; }
+.top button { background: var(--bg); white-space: nowrap; }
 .top button.primary { background: var(--amber); }
 .top .tab.active { background: var(--text); border-color: var(--text); color: var(--bg); }
 .grow { flex: 1; }
@@ -295,3 +298,5 @@ form.comment .foot small { margin-left: auto; }
 .info .meter { height: 4px; border-radius: 99px; background: var(--line); margin-top: 6px; overflow: hidden; }
 .info .meter i { display: block; height: 100%; border-radius: 99px; background: var(--accent); }
 @media (max-width: 1100px) { .over { grid-template-columns: minmax(0, 1fr); } .info { position: static; max-height: none; } }
+.over .box, .over .lead, .over .thread, .over form.comment { max-width: none; }
+.info .latest { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

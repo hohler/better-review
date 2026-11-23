@@ -457,7 +457,7 @@ function threadEl(root, comments, post, lang) {
 }
 
 // The facts about a PR, in a column beside the overview: where it stands, who reviews it, how big it is, what it touches.
-function infoEl(pr, files, reviewed, mine, openFile) {
+function infoEl(pr, files, reviewed, mine, checks, openFile) {
   const order = { changes_requested: 0, approved: 1 };
   // Reviewers, plus anyone else who approved or asked for changes.
   const people = (pr.participants ?? []).filter((p) => (p.role === 'REVIEWER' || p.state) && p.user?.uuid !== pr.author?.uuid).sort((a, b) => (order[a.state] ?? 2) - (order[b.state] ?? 2));
@@ -469,11 +469,22 @@ function infoEl(pr, files, reviewed, mine, openFile) {
   const sum = (k) => files.reduce((n, f) => n + f[k], 0);
   const done = files.filter((f) => reviewed.has(f.path)).length;
   const part = (label, ...kids) => h('section', {}, h('h4', { textContent: label }), kids);
+  // Build checks come with the inbox, as counts plus the latest one. Failed beats running beats passed.
+  const build = !checks?.total
+    ? null
+    : checks.failed + checks.stopped > 0
+      ? ['✕', `${checks.failed + checks.stopped} of ${checks.total} failed`, 'minus']
+      : checks.inProgress > 0
+        ? ['◌', `${checks.inProgress} of ${checks.total} running`, 'warn']
+        : checks.successful === checks.total
+          ? ['✓', checks.total === 1 ? 'Passed' : `All ${checks.total} passed`, 'plus']
+          : ['○', `${checks.successful} of ${checks.total} passed`, 'muted'];
   return h(
     'aside',
     { className: 'info' },
     part('Status', h('div', { className: 'who' }, h('span', { textContent: pr.state === 'OPEN' || !pr.state ? 'Open' : pr.state[0] + pr.state.slice(1).toLowerCase() }), yours && h('span', { className: `tag ${yours[1]}`, textContent: yours[0] }))),
     people.length > 0 && part('Reviewers', people.map(person)),
+    build && part('Checks', h('div', { className: 'who' }, h('span', { className: build[2], textContent: build[0] }), h('span', { textContent: build[1] })), checks.latest?.name && h('small', { className: 'latest', title: 'Latest check, as of the last refresh', textContent: checks.latest.name })),
     part('Changes', h('div', { className: 'who' }, h('span', { textContent: `${files.length} file${files.length === 1 ? '' : 's'}` }), h('span', { className: 'stats' }, h('span', { className: 'plus', textContent: `+${sum('added')}` }), ' ', h('span', { className: 'minus', textContent: `−${sum('removed')}` })))),
     part('Reviewed by you', h('div', { className: 'who' }, h('span', { textContent: `${done} of ${files.length} files` })), h('div', { className: 'meter' }, h('i', { style: `width:${files.length ? (done / files.length) * 100 : 0}%` }))),
     part('Updated', h('div', { className: 'who' }, h('span', { textContent: ago(pr.updated_on) }))),
@@ -623,6 +634,8 @@ function fileEl(f, hidden, ctx, only) {
   else show();
   return card;
 }
+
+const barWatch = new ResizeObserver(([entry]) => main.style.setProperty('--bar', `${Math.round(entry.borderBoxSize[0].blockSize)}px`));
 
 function draw(repo, id, data, guide) {
   const { pr, files } = data;
@@ -818,7 +831,7 @@ function draw(repo, id, data, guide) {
           pr.description && h('div', { className: 'box' }, h('h3', { textContent: 'Description' }), rich(pr.description)),
           h('div', { className: 'box' }, h('h3', { textContent: `Discussion (${general.length})` }), general.map((c) => threadEl(c, comments, post)), commentForm((text, pending) => post({ text, pending }))),
         ),
-        infoEl(pr, files, reviewed, mine, (path) => {
+        infoEl(pr, files, reviewed, mine, Object.values(inboxes).flatMap((i) => i.items ?? []).find((i) => i.repo === repo && i.id === id)?.summary?.checks, (path) => {
           tab = 'diff';
           draw(repo, id, data, guide);
           const el = document.getElementById(`f-${path}`);
@@ -847,12 +860,15 @@ function draw(repo, id, data, guide) {
     h(
       'div',
       { className: 'top' },
-      Object.keys(views).map((t) => h('button', { className: 'tab' + (t === tab ? ' active' : ''), textContent: t[0].toUpperCase() + t.slice(1), onclick: () => ((tab = t), draw(repo, id, data, guide)) })),
-      h('span', { className: 'grow' }),
-      pendingCount > 0 && h('button', { className: 'on warn', textContent: `${pendingCount} pending · finish in Bitbucket`, title: 'Pending comments are published when you finish the review in Bitbucket', onclick: () => invoke('open_url', { url: pr.links.html.href }) }),
-      h('button', { textContent: 'Open in Bitbucket', onclick: () => invoke('open_url', { url: pr.links.html.href }) }),
-      h('button', { className: changes ? 'on warn' : '', textContent: changes ? '✗ Changes requested' : 'Request changes', onclick: act(changes ? 'remove-request-changes' : 'request-changes') }),
-      h('button', { className: mine?.approved ? 'on' : 'primary', textContent: mine?.approved ? '✓ Approved' : 'Approve', onclick: act(mine?.approved ? 'unapprove' : 'approve') }),
+      h('div', { className: 'tabs' }, Object.keys(views).map((t) => h('button', { className: 'tab' + (t === tab ? ' active' : ''), textContent: t[0].toUpperCase() + t.slice(1), onclick: () => ((tab = t), draw(repo, id, data, guide)) }))),
+      h(
+        'div',
+        { className: 'acts' },
+        pendingCount > 0 && h('button', { className: 'on warn', textContent: `${pendingCount} pending · finish in Bitbucket`, title: 'Pending comments are published when you finish the review in Bitbucket', onclick: () => invoke('open_url', { url: pr.links.html.href }) }),
+        h('button', { textContent: 'Open in Bitbucket', onclick: () => invoke('open_url', { url: pr.links.html.href }) }),
+        h('button', { className: changes ? 'on warn' : '', textContent: changes ? '✗ Changes requested' : 'Request changes', onclick: act(changes ? 'remove-request-changes' : 'request-changes') }),
+        h('button', { className: mine?.approved ? 'on' : 'primary', textContent: mine?.approved ? '✓ Approved' : 'Approve', onclick: act(mine?.approved ? 'unapprove' : 'approve') }),
+      ),
     ),
     h('h1', {}, title),
     // Always visible: who wants to merge what into where.
@@ -868,6 +884,9 @@ function draw(repo, id, data, guide) {
     ),
     views[tab](),
   );
+  // The toolbar may wrap onto several lines; everything that sticks below it follows its real height.
+  barWatch.disconnect();
+  barWatch.observe(main.querySelector('.top'));
   main.scrollTop = 0;
 }
 

@@ -20,6 +20,19 @@
     "role": "reviewer",
     "approved": false,
     "participantState": null
+   },
+   "summary": {
+    "checks": {
+     "total": 2,
+     "successful": 2,
+     "failed": 0,
+     "inProgress": 0,
+     "stopped": 0,
+     "latest": {
+      "state": "SUCCESSFUL",
+      "name": "Pipeline - pullrequests: **"
+     }
+    }
    }
   },
   {
@@ -37,6 +50,19 @@
     "role": "reviewer",
     "approved": false,
     "participantState": "changes_requested"
+   },
+   "summary": {
+    "checks": {
+     "total": 2,
+     "successful": 2,
+     "failed": 0,
+     "inProgress": 0,
+     "stopped": 0,
+     "latest": {
+      "state": "SUCCESSFUL",
+      "name": "Pipeline - pullrequests: **"
+     }
+    }
    }
   },
   {
@@ -54,6 +80,19 @@
     "role": "reviewer",
     "approved": false,
     "participantState": null
+   },
+   "summary": {
+    "checks": {
+     "total": 2,
+     "successful": 2,
+     "failed": 0,
+     "inProgress": 0,
+     "stopped": 0,
+     "latest": {
+      "state": "SUCCESSFUL",
+      "name": "Pipeline - pullrequests: **"
+     }
+    }
    }
   },
   {
@@ -71,6 +110,19 @@
     "role": "reviewer",
     "approved": true,
     "participantState": "approved"
+   },
+   "summary": {
+    "checks": {
+     "total": 2,
+     "successful": 2,
+     "failed": 0,
+     "inProgress": 0,
+     "stopped": 0,
+     "latest": {
+      "state": "SUCCESSFUL",
+      "name": "Pipeline - pullrequests: **"
+     }
+    }
    }
   },
   {
@@ -88,6 +140,19 @@
     "role": "reviewer",
     "approved": true,
     "participantState": "approved"
+   },
+   "summary": {
+    "checks": {
+     "total": 2,
+     "successful": 2,
+     "failed": 0,
+     "inProgress": 0,
+     "stopped": 0,
+     "latest": {
+      "state": "SUCCESSFUL",
+      "name": "Pipeline - pullrequests: **"
+     }
+    }
    }
   }
  ]
