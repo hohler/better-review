@@ -456,19 +456,35 @@ function threadEl(root, comments, post, lang) {
   return h('div', { className: 'thread' + (root.resolution ? ' resolved' : '') }, all.map(item), slot);
 }
 
-// Who reviews this PR and where each stands: reviewers, plus anyone else who approved or asked for changes.
-function reviewersEl(pr) {
+// The facts about a PR, in a column beside the overview: where it stands, who reviews it, how big it is, what it touches.
+function infoEl(pr, files, reviewed, mine, openFile) {
   const order = { changes_requested: 0, approved: 1 };
-  const people = (pr.participants ?? [])
-    .filter((p) => (p.role === 'REVIEWER' || p.state) && p.user?.uuid !== pr.author?.uuid)
-    .sort((a, b) => (order[a.state] ?? 2) - (order[b.state] ?? 2));
-  if (!people.length) return null;
-  const chip = (p) => {
-    const [mark, label, cls] = p.state === 'approved' ? ['✓', 'approved', ' plus'] : p.state === 'changes_requested' ? ['●', 'changes requested', ' pending'] : ['○', 'has not reviewed yet', ''];
-    const name = p.user?.uuid === myUuid() ? 'You' : (p.user?.display_name ?? '?');
-    return h('span', { className: 'tag' + cls, title: `${name}: ${label}`, textContent: `${mark} ${name}${p.state === 'changes_requested' ? ' · changes requested' : ''}` });
+  // Reviewers, plus anyone else who approved or asked for changes.
+  const people = (pr.participants ?? []).filter((p) => (p.role === 'REVIEWER' || p.state) && p.user?.uuid !== pr.author?.uuid).sort((a, b) => (order[a.state] ?? 2) - (order[b.state] ?? 2));
+  const person = (p) => {
+    const [mark, label, cls] = p.state === 'approved' ? ['✓', 'Approved', 'plus'] : p.state === 'changes_requested' ? ['●', 'Changes requested', 'warn'] : ['○', 'Not reviewed yet', 'muted'];
+    return h('div', { className: 'who', title: label }, h('span', { className: cls, textContent: mark }), h('span', { textContent: p.user?.uuid === myUuid() ? 'You' : (p.user?.display_name ?? '?') }), p.state === 'changes_requested' && h('small', { className: 'warn', textContent: 'changes requested' }));
   };
-  return h('p', { className: 'reviewers' }, h('small', { textContent: 'Reviewers' }), people.map(chip));
+  const yours = !mine ? null : mine.state === 'approved' ? ['You approved', 'plus'] : mine.state === 'changes_requested' ? ['You requested changes', 'warn'] : ['Waiting for your review', ''];
+  const sum = (k) => files.reduce((n, f) => n + f[k], 0);
+  const done = files.filter((f) => reviewed.has(f.path)).length;
+  const part = (label, ...kids) => h('section', {}, h('h4', { textContent: label }), kids);
+  return h(
+    'aside',
+    { className: 'info' },
+    part('Status', h('div', { className: 'who' }, h('span', { textContent: pr.state === 'OPEN' || !pr.state ? 'Open' : pr.state[0] + pr.state.slice(1).toLowerCase() }), yours && h('span', { className: `tag ${yours[1]}`, textContent: yours[0] }))),
+    people.length > 0 && part('Reviewers', people.map(person)),
+    part('Changes', h('div', { className: 'who' }, h('span', { textContent: `${files.length} file${files.length === 1 ? '' : 's'}` }), h('span', { className: 'stats' }, h('span', { className: 'plus', textContent: `+${sum('added')}` }), ' ', h('span', { className: 'minus', textContent: `−${sum('removed')}` })))),
+    part('Reviewed by you', h('div', { className: 'who' }, h('span', { textContent: `${done} of ${files.length} files` })), h('div', { className: 'meter' }, h('i', { style: `width:${files.length ? (done / files.length) * 100 : 0}%` }))),
+    part('Updated', h('div', { className: 'who' }, h('span', { textContent: ago(pr.updated_on) }))),
+    part(
+      'Files',
+      files.map((f) => {
+        const name = f.path.split('/').pop();
+        return h('a', { className: 'frow' + (reviewed.has(f.path) ? ' done' : ''), title: f.path, onclick: () => openFile(f.path) }, icon(name), h('span', { className: f.status === 'added' ? 'plus' : '', textContent: name }), h('span', { className: 'dir', textContent: f.path.slice(0, -name.length) }), h('span', { className: 'stats' }, stats(f)));
+      }),
+    ),
+  );
 }
 
 // Small centred line under a guide or tour: which agent and model wrote it, and what that request used.
@@ -791,11 +807,25 @@ function draw(repo, id, data, guide) {
   // Issue keys like TVP-27172 in the title link to the Jira site named after the Bitbucket workspace.
   const title = pr.title.split(/\b([A-Z][A-Z0-9]+-\d+)\b/).map((part, n) => (n % 2 ? h('a', { textContent: part, title: 'Open in Jira', onclick: () => invoke('open_url', { url: `https://${repo.split('/')[0]}.atlassian.net/browse/${part}` }) }) : part));
   const views = {
-    overview: () => [
-      guide && rich(g.summary, 'lead text'),
-      pr.description && h('div', { className: 'box' }, h('h3', { textContent: 'Description' }), rich(pr.description)),
-      h('div', { className: 'box' }, h('h3', { textContent: `Discussion (${general.length})` }), general.map((c) => threadEl(c, comments, post)), commentForm((text, pending) => post({ text, pending }))),
-    ],
+    overview: () =>
+      h(
+        'div',
+        { className: 'over' },
+        h(
+          'div',
+          {},
+          guide && rich(g.summary, 'lead text'),
+          pr.description && h('div', { className: 'box' }, h('h3', { textContent: 'Description' }), rich(pr.description)),
+          h('div', { className: 'box' }, h('h3', { textContent: `Discussion (${general.length})` }), general.map((c) => threadEl(c, comments, post)), commentForm((text, pending) => post({ text, pending }))),
+        ),
+        infoEl(pr, files, reviewed, mine, (path) => {
+          tab = 'diff';
+          draw(repo, id, data, guide);
+          const el = document.getElementById(`f-${path}`);
+          el?.show();
+          el?.scrollIntoView({ block: 'start' });
+        }),
+      ),
     // The guide is requested here, on first open of the tab, so opening a PR alone never spends an AI request.
     guide: () => {
       if (guide) return [steps.map(step), aiFooter(guide.meta)];
@@ -825,8 +855,17 @@ function draw(repo, id, data, guide) {
       h('button', { className: mine?.approved ? 'on' : 'primary', textContent: mine?.approved ? '✓ Approved' : 'Approve', onclick: act(mine?.approved ? 'unapprove' : 'approve') }),
     ),
     h('h1', {}, title),
-    h('p', { className: 'meta' }, h('span', { textContent: `${pr.author?.display_name ?? '?'} · ` }), h('code', { textContent: `${pr.destination.branch.name} ← ${pr.source.branch.name}` }), h('span', { textContent: ` · ${repo} #${id} · ${files.length} files · ${reviewed.size} reviewed · updated ${ago(pr.updated_on)}` })),
-    reviewersEl(pr),
+    // Always visible: who wants to merge what into where.
+    h(
+      'p',
+      { className: 'meta' },
+      h('b', { textContent: pr.author?.display_name ?? '?' }),
+      ' wants to merge ',
+      h('code', { className: 'branch', title: 'Source branch', textContent: pr.source.branch.name }),
+      h('span', { className: 'arrow', textContent: '→' }),
+      h('code', { className: 'branch', title: 'Target branch', textContent: pr.destination.branch.name }),
+      h('span', { className: 'where', textContent: `${repo} #${id}` }),
+    ),
     views[tab](),
   );
   main.scrollTop = 0;

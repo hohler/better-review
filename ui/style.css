@@ -242,11 +242,6 @@ dialog.settings select { padding: 6px 8px; border: 1px solid var(--line); border
 .text th, .text td { border: 1px solid var(--line); padding: 4px 10px; text-align: left; vertical-align: top; }
 .text th { background: var(--page); font-weight: 600; }
 
-.meta:has(+ .reviewers) { margin-bottom: 10px; }
-.reviewers { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 36px; }
-.reviewers small { margin-right: 2px; }
-.reviewers .tag { font-size: 12px; padding: 1px 10px; background: var(--bg); }
-.reviewers .tag.plus { color: var(--green); border-color: currentColor; }
 
 /* Comment editor: toolbar, markdown field and live preview in one frame. */
 .ed { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--bg); }
@@ -277,3 +272,26 @@ dialog.settings select { padding: 6px 8px; border: 1px solid var(--line); border
 .mirror .li, .mirror .task { color: var(--accent); font-weight: 700; }
 form.comment .foot { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
 form.comment .foot small { margin-left: auto; }
+
+/* PR header: who wants to merge what into where. */
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 14px; }
+.meta b { color: var(--text); font-weight: 600; }
+.meta .branch { font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); color: var(--text); }
+.meta .arrow { color: var(--muted); }
+.meta .where { margin-left: 6px; padding-left: 12px; border-left: 1px solid var(--line); }
+
+/* Overview: content on the left, the PR's facts in a column on the right. */
+.over { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 28px; align-items: start; }
+.over .box:first-child, .over .lead:first-child { margin-top: 0; }
+.info { position: sticky; top: calc(var(--bar) + 4px); max-height: calc(100vh - var(--bar) - 24px); overflow-y: auto; padding: 16px 18px; border-radius: 12px; background: var(--bg); }
+.info section + section { margin-top: 18px; }
+.info h4 { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.info .who { display: flex; gap: 8px; align-items: center; padding: 2px 0; }
+.info .who .stats, .info .who small { margin-left: auto; }
+.info .warn { color: light-dark(#b45309, #f0a34a); }
+.info .tag { background: none; }
+.info .tag.plus, .info .tag.warn { border-color: currentColor; }
+.info .tag.plus { color: var(--green); }
+.info .meter { height: 4px; border-radius: 99px; background: var(--line); margin-top: 6px; overflow: hidden; }
+.info .meter i { display: block; height: 100%; border-radius: 99px; background: var(--accent); }
+@media (max-width: 1100px) { .over { grid-template-columns: minmax(0, 1fr); } .info { position: static; max-height: none; } }
