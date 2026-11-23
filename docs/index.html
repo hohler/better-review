@@ -9,7 +9,7 @@
 <meta property="og:description" content="Guided pull request reviews for Bitbucket. Read a guide, follow a tour, approve.">
 <meta property="og:image" content="https://hohler.github.io/better-review/screenshots/hero.png">
 <style>
-  /* No web fonts and no scripts: the page makes no third-party requests. */
+  /* No web fonts and no third-party requests. The one inline script is the light/dark switch. */
   :root {
     color-scheme: light dark;
     --page: light-dark(#f0f3f8, #0d1521);
@@ -28,6 +28,9 @@
     --sans: 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
     --measure: 34rem;
   }
+  /* The switch pins a theme through data-theme; without it the page follows the system. */
+  :root[data-theme='light'] { color-scheme: light; }
+  :root[data-theme='dark'] { color-scheme: dark; }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--page); color: var(--ink); font: 1.0625rem/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
   a { color: var(--accent); text-underline-offset: 0.18em; }
@@ -38,7 +41,11 @@
 
   .masthead { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding-block: 1.5rem; }
   .masthead strong { font-size: 1.125rem; letter-spacing: -0.01em; }
-  .masthead nav { display: flex; gap: 1.5rem; }
+  .masthead strong, .theme { white-space: nowrap; }
+  .masthead nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem 1.5rem; align-items: baseline; }
+  .theme { font: inherit; color: var(--ink); background: none; border: 1.5px solid var(--rule); border-radius: 99px; padding: 0.2rem 0.8rem; cursor: pointer; }
+  .theme:hover { border-color: var(--ink); }
+  .theme:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 
   /* The headline is a diff: the old way of reviewing removed, the new way added. */
   .diff { margin: clamp(1.5rem, 5vw, 4rem) 0 0; border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; background: var(--sheet); font: 600 clamp(1.05rem, 0.7rem + 1.9vw, 2.05rem)/1.35 var(--mono); letter-spacing: -0.02em; }
@@ -103,6 +110,7 @@
     <nav>
       <a href="https://github.com/hohler/better-review">Source on GitHub</a>
       <a href="#install">Install</a>
+      <button class="theme" type="button" hidden></button>
     </nav>
   </header>
 
@@ -220,5 +228,29 @@
 
   <footer>Better Review is not affiliated with Atlassian, Anthropic or GitHub.</footer>
 </div>
+<script>
+  // Light/dark switch. It also swaps the screenshots: each <picture> has a dark <source> whose media query is rewritten.
+  (() => {
+    const button = document.querySelector('.theme');
+    const system = matchMedia('(prefers-color-scheme: dark)');
+    let pinned = null;
+    try { pinned = localStorage.getItem('theme'); } catch {}
+    const apply = () => {
+      const dark = pinned ? pinned === 'dark' : system.matches;
+      if (pinned) document.documentElement.dataset.theme = pinned;
+      for (const source of document.querySelectorAll('picture source')) source.media = pinned ? (dark ? 'all' : 'not all') : '(prefers-color-scheme: dark)';
+      button.textContent = dark ? 'Light mode' : 'Dark mode';
+      button.setAttribute('aria-pressed', dark);
+    };
+    button.hidden = false;
+    button.onclick = () => {
+      pinned = (pinned ? pinned === 'dark' : system.matches) ? 'light' : 'dark';
+      try { localStorage.setItem('theme', pinned); } catch {}
+      apply();
+    };
+    system.addEventListener('change', apply);
+    apply();
+  })();
+</script>
 </body>
 </html>
