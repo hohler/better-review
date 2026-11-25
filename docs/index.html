@@ -96,6 +96,8 @@
   .install h2 { margin: 0 0 1.5rem; font-size: clamp(1.75rem, 1.2rem + 2vw, 2.75rem); line-height: 1.1; letter-spacing: -0.03em; }
   .install ol { margin: 0 0 2rem; padding-left: 1.4rem; max-width: var(--measure); }
   .install li { margin-bottom: 0.6rem; padding-left: 0.3rem; }
+  .install li ul { margin: 0.5rem 0 0; padding-left: 1.2rem; }
+  .install li li { margin-bottom: 0.25rem; }
 
   footer { padding-block: 2rem 3rem; color: var(--soft); font-size: 0.875rem; }
 
@@ -251,7 +253,12 @@
     <section class="install" id="install">
       <h2>Install</h2>
       <ol>
-        <li>For Bitbucket install <code>twg</code>, for GitHub install <code>gh</code>, or both. Sign in.</li>
+        <li>Install the command line tool for the host your pull requests are on, and sign in. You only need the one you use.
+          <ul>
+            <li>Bitbucket: <code>twg</code></li>
+            <li>GitHub: <code>gh</code>, then run <code>gh auth login</code></li>
+          </ul>
+        </li>
         <li>Install Claude Code or the GitHub Copilot CLI and sign in.</li>
         <li>Download Better Review and open it. A short setup asks for your agent and where your pull requests are.</li>
       </ol>

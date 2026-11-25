@@ -16,6 +16,8 @@ The screenshots show invented data (`docs/demo`). The website is `docs/index.htm
 
 ## Requirements
 
+You need `twg` or `gh`, depending on where your pull requests are, or both.
+
 - For Bitbucket: `twg` CLI, logged in to the workspaces you review in
 - For GitHub: `gh` CLI, logged in with `gh auth login`. The app shows the open pull requests on github.com that wait for your review. Add it in the sidebar with "Connect GitHub"
 - One AI agent CLI, logged in. Guide and tour are generated on your own account:
@@ -45,7 +47,7 @@ npm test        # diff parser and guide checks
 
 The installer (`Better Review_<version>_x64-setup.exe`) is built on GitHub by the "Windows build" workflow. It is attached to each release, and a manual run of the workflow gives a test build as a download.
 
-- Install `twg` and `claude` or `copilot` as on macOS. For Claude Code use the native installer (`claude.exe`): the npm version is a `.cmd` shim, which may not accept the long arguments the app passes.
+- Install the CLIs as on macOS: `twg` for Bitbucket, `gh` for GitHub (`winget install GitHub.cli`, then `gh auth login`), and `claude` or `copilot`. You only need the one for the host you use. For Claude Code use the native installer (`claude.exe`): the npm version is a `.cmd` shim, which may not accept the long arguments the app passes.
 - The installer is not signed, so SmartScreen warns on first start: click **More info**, then **Run anyway**.
 - To build locally on Windows: `npm ci`, then `npx tauri build`.
 
