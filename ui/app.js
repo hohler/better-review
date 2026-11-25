@@ -259,13 +259,13 @@ function renderSide() {
       return h(
         'section',
         {},
-        h('h2', {}, h('button', { className: 'src', ariaExpanded: String(!closed), title: closed ? 'Show' : 'Hide', onclick: fold }, h('span', { className: 'chev', textContent: '›' }), h('i', { className: `host ${gh ? 'gh' : 'bb'}`, textContent: gh ? 'GitHub' : 'Bitbucket' }), h('span', { className: 'name', textContent: gh ? (inboxes[ws]?.currentUser?.uuid ?? '') : ws }), closed && h('span', { className: 'n', textContent: items.filter((i) => !i.attention?.approved).length })), h('button', { textContent: '×', title: gh ? 'Remove GitHub' : 'Remove workspace', onclick: remove })),
+        h('h2', {}, h('button', { className: 'src', ariaExpanded: String(!closed), title: closed ? 'Show' : 'Hide', onclick: fold }, h('i', { className: `host ${gh ? 'gh' : 'bb'}`, textContent: gh ? 'GitHub' : 'Bitbucket' }), h('span', { className: 'name', textContent: gh ? (inboxes[ws]?.currentUser?.uuid ?? '') : ws }), closed && h('span', { className: 'n', textContent: items.filter((i) => !i.attention?.approved).length }), h('span', { className: 'chev', textContent: '›' })), h('button', { textContent: '×', title: gh ? 'Remove GitHub' : 'Remove workspace', onclick: remove })),
         errors[ws] && h('p', { className: 'error', textContent: errors[ws] }),
         !closed && [
           ['To review', items.filter((i) => !i.attention?.approved)],
           ['Approved', items.filter((i) => i.attention?.approved), approvedOpen, foldApproved],
         ].map(([label, list, open = true, toggle]) => [
-          list.length > 0 && (toggle ? h('h3', {}, h('button', { className: 'src', ariaExpanded: String(open), title: open ? 'Hide' : 'Show', onclick: toggle }, h('span', { className: 'chev', textContent: '›' }), `${label} (${list.length})`)) : h('h3', { textContent: `${label} (${list.length})` })),
+          list.length > 0 && (toggle ? h('h3', {}, h('button', { className: 'src', ariaExpanded: String(open), title: open ? 'Hide' : 'Show', onclick: toggle }, `${label} (${list.length})`, h('span', { className: 'chev', textContent: '›' }))) : h('h3', { textContent: `${label} (${list.length})` })),
           // Repos in the order of their most recently updated PR.
           open && Object.entries(Object.groupBy(list.sort((a, b) => b.updatedOn.localeCompare(a.updatedOn)), (i) => i.repo)).map(([repo, prsOfRepo]) => [
             h('h4', { textContent: gh ? shortRepo(repo) : repo.split('/')[1] }),

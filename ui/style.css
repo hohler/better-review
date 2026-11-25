@@ -331,9 +331,11 @@ td.code a.sym.open { color: var(--accent); text-decoration: underline; backgroun
 #side section + section { border-top: 1px solid var(--line); margin-top: 16px; }
 #side h2 button.src, #side h3 button.src { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; border: 0; padding: 2px 0; background: none; color: inherit; font: inherit; text-transform: inherit; letter-spacing: inherit; text-align: left; cursor: pointer; }
 #side h2 .src .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The same arrow as on a file card: it appears on hover, points down when open and right when folded. */
-#side h2, #side h3 { position: relative; }
-#side h2 .src .chev, #side h3 .src .chev { position: absolute; left: -9px; top: 50%; margin-top: -9px; width: 9px; text-align: center; text-transform: none; }
+/* The same arrow as on a file card, at the right edge: it appears on hover, points down when open and right when folded. */
+#side h2 .src .chev, #side h3 .src .chev { flex: none; margin-left: auto; width: 16px; text-align: center; text-transform: none; }
+/* The remove button waits for the pointer too, unless it is armed. */
+#side h2 > button:not(.src) { visibility: hidden; }
+#side h2:hover > button, #side h2 > button.warn, #side h2 > button:focus-visible { visibility: visible; }
 #side h2:hover .chev, #side h3:hover .chev, #side .src:focus-visible .chev { visibility: visible; }
 #side .src[aria-expanded="false"] .chev { transform: none; }
 #side h2 .src .n { padding: 0 6px; border-radius: 8px; background: var(--line); color: var(--text); }
@@ -344,5 +346,5 @@ td.code a.sym.open { color: var(--accent); text-decoration: underline; backgroun
 #side .connect { width: 100%; margin-top: 8px; padding: 4px 8px; border: 1px dashed var(--line); border-radius: 6px; background: none; color: var(--muted); text-align: left; }
 #side .connect:hover { color: var(--text); border-style: solid; }
 dialog.settings .field { display: grid; gap: 4px; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-#side h3 button.src { font-weight: inherit; }
+#side h3 button.src { width: 100%; font-weight: inherit; }
 #side h3 .src[aria-expanded="false"] { color: var(--muted); }
