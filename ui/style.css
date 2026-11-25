@@ -326,3 +326,13 @@ tr.flash td { animation: flash 3.2s ease-out; }
 .defpop footer button { padding: 4px 12px; }
 .defpop .scroll { padding-bottom: 0; }
 td.code a.sym.open { color: var(--accent); text-decoration: underline; background: color-mix(in srgb, var(--accent) 14%, transparent); border-radius: 3px; }
+
+/* Sources in the sidebar: each Bitbucket workspace and GitHub get their own block with a badge in the host's colour. */
+#side section + section { border-top: 1px solid var(--line); margin-top: 16px; }
+#side h2 .src { display: flex; align-items: center; gap: 7px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#side .host { flex: none; font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: .04em; padding: 2px 6px; border-radius: 4px; }
+#side .host.bb { background: light-dark(#deebff, #0c2a5c); color: light-dark(#0747a6, #9dc1ff); }
+#side .host.gh { background: light-dark(#1f2328, #f0f3f6); color: light-dark(#ffffff, #1f2328); }
+#side .connect { width: 100%; margin-top: 8px; padding: 4px 8px; border: 1px dashed var(--line); border-radius: 6px; background: none; color: var(--muted); text-align: left; }
+#side .connect:hover { color: var(--text); border-style: solid; }
+dialog.settings .field { display: grid; gap: 4px; font-size: 12px; color: var(--muted); margin-bottom: 6px; }

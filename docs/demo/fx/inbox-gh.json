@@ -1,0 +1,9 @@
+{
+ "workspace": "github.com",
+ "currentUser": { "displayName": "alexmorgan", "uuid": "alexmorgan" },
+ "items": [
+  { "id": 318, "title": "Cache the product search index per locale", "repo": "github.com/nimbus-labs/search-api", "draft": false, "link": "https://github.com/nimbus-labs/search-api/pull/318", "author": { "displayName": "tessa-lind" }, "updatedOn": "@-1h", "attention": { "approved": false, "participantState": null } },
+  { "id": 311, "title": "Drop the legacy XML feed", "repo": "github.com/nimbus-labs/search-api", "draft": false, "link": "https://github.com/nimbus-labs/search-api/pull/311", "author": { "displayName": "omar-haddad" }, "updatedOn": "@-26h", "attention": { "approved": false, "participantState": "changes_requested" } },
+  { "id": 57, "title": "Keyboard navigation for the date picker", "repo": "github.com/open-kit/ui", "draft": false, "link": "https://github.com/open-kit/ui/pull/57", "author": { "displayName": "mira-okafor" }, "updatedOn": "@-5h", "attention": { "approved": true, "participantState": "approved" } }
+ ]
+}

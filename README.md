@@ -1,6 +1,6 @@
 # Better Review
 
-Guided pull request reviews for Bitbucket, as a desktop app for macOS and Windows (Tauri).
+Guided pull request reviews for Bitbucket and GitHub, as a desktop app for macOS and Windows (Tauri).
 
 Website: https://betterreview.app/
 
@@ -16,13 +16,14 @@ The screenshots show invented data (`docs/demo`). The website is `docs/index.htm
 
 ## Requirements
 
-- `twg` CLI, logged in to the Bitbucket workspaces you review in
+- For Bitbucket: `twg` CLI, logged in to the workspaces you review in
+- For GitHub: `gh` CLI, logged in with `gh auth login`. The app shows the open pull requests on github.com that wait for your review. Add it in the sidebar with "Connect GitHub"
 - One AI agent CLI, logged in. Guide and tour are generated on your own account:
   - `claude` (Claude Code): by default Sonnet for the guide, Opus for the tour, or
   - `copilot` (GitHub Copilot CLI): by default Copilot picks the model your plan allows. Each guide or tour is one premium request.
 - To build: Node, Rust (`brew install rustup && rustup default stable`), Xcode command line tools
 
-On first start a short wizard asks which agent to use and for your Bitbucket workspace. You can change the agent, and the model for guide and tour, later under Better Review > Settings (Cmd+,).
+On first start a short wizard asks which agent to use and where your pull requests are: a Bitbucket workspace, GitHub or both. You can change the agent, and the model for guide and tour, later under Better Review > Settings (Cmd+,).
 
 ## Build
 
@@ -35,6 +36,7 @@ npm test        # diff parser and guide checks
 
 ## How it works
 
+- `src-tauri/src/github.rs`: runs `gh` and reshapes its answers into the form `twg` gives, so the UI knows one shape
 - `src-tauri/src/main.rs`: runs `twg` and the AI agent (`claude` or `copilot`, both with all tools disabled), caches diffs, guides and tours per commit in `~/Library/Caches/better-review` (Windows: `%LOCALAPPDATA%\better-review\cache`)
 - `ui/lib.js`: diff parser, generated/test file detection, guide normalization
 - `ui/app.js`: the interface. Settings, workspaces and "Reviewed" marks live in the webview's localStorage.

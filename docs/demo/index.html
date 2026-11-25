@@ -14,7 +14,8 @@ const q = new URLSearchParams(location.hash.slice(1));
 localStorage.clear();
 if (q.get('theme')) localStorage.setItem('theme', JSON.stringify(q.get('theme')));
 localStorage.setItem('agent', '"claude"');
-localStorage.setItem('workspaces', '["acme"]');
+// &gh=1 adds GitHub as a second source.
+localStorage.setItem('workspaces', q.get('gh') ? '["acme","github.com"]' : '["acme"]');
 
 const fx = async (name) => {
   const text = await (await fetch(`fx/${name}`)).text();
@@ -26,12 +27,13 @@ window.__TAURI__ = {
   core: {
     invoke: async (cmd, a) => {
       if (q.get('slow')) await sleep(+q.get('slow')); // &slow=2000 imitates a slow connection
-      if (cmd === 'installed') return { claude: true, copilot: true, twg: true };
+      if (cmd === 'installed') return { claude: true, copilot: true, twg: true, gh: true };
       if (cmd === 'models') return [{ id: 'gpt-6-luna', name: 'GPT-6 Luna' }, { id: 'mai-code-2-flash', name: 'MAI Code 2 Flash' }];
-      if (cmd === 'inbox') return fx('inbox.json');
+      if (cmd === 'inbox') return fx(a.workspace === 'github.com' ? 'inbox-gh.json' : 'inbox.json');
       if (cmd === 'pr' && a.id !== 482) {
-        const i = JSON.parse(await fx('inbox.json')).items.find((x) => x.id === a.id);
-        return JSON.stringify({ id: i.id, title: i.title, description: '', author: { display_name: i.author.displayName }, updated_on: i.updatedOn, source: { branch: { name: 'feature' }, commit: { hash: 'demo' }, repository: { full_name: i.repo } }, destination: { branch: { name: 'main' } }, participants: [{ user: { uuid: '{me}' }, approved: i.attention.approved, state: i.attention.participantState }], links: { html: { href: i.link } }, _comments: [] });
+        const gh = a.repo.startsWith('github.com/');
+        const i = JSON.parse(await fx(gh ? 'inbox-gh.json' : 'inbox.json')).items.find((x) => x.id === a.id);
+        return JSON.stringify({ id: i.id, title: i.title, description: '', author: { display_name: i.author.displayName }, updated_on: i.updatedOn, source: { branch: { name: 'feature' }, commit: { hash: 'demo' }, repository: { full_name: i.repo } }, destination: { branch: { name: 'main' } }, participants: [{ user: { uuid: gh ? 'alexmorgan' : '{me}' }, approved: i.attention.approved, state: i.attention.participantState }], links: { html: { href: i.link } }, _comments: [] });
       }
       if (cmd === 'pr') return fx('pr-482.json');
       if (cmd === 'diff') return a.id === 482 ? fx('diff-482.txt') : '';
@@ -55,7 +57,7 @@ addEventListener('load', async () => {
   const shot = q.get('shot');
   if (!shot) return;
   if (shot === 'settings') return (await find('#side button[title^="Settings"]')).click();
-  (await find('#side a.pr', '#482')).click();
+  (await find('#side a.pr', q.get('pr') ?? '#482')).click(); // &pr=%23318 opens another one
   if (shot === 'overview') return;
   (await find('#main .top button', shot[0].toUpperCase() + shot.slice(1))).click();
   if (shot === 'tour') {

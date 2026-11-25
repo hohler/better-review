@@ -67,6 +67,11 @@ function spinner(label, id, measure) {
   return el;
 }
 const key = (repo, id) => `${repo}#${id}`;
+// GitHub is one more source beside the Bitbucket workspaces. Its repos are named "github.com/owner/name".
+const GH = 'github.com';
+const isGh = (repo) => repo.startsWith(`${GH}/`);
+const shortRepo = (repo) => (isGh(repo) ? repo.slice(GH.length + 1) : repo);
+let host = 'Bitbucket'; // where the PR on screen lives, for labels
 
 // The shortcut modifier: Cmd on macOS, Ctrl elsewhere.
 const MAC = navigator.platform.startsWith('Mac');
@@ -110,11 +115,12 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'ArrowLeft') tourNav(-1);
 });
 
-const myUuid = () => Object.values(inboxes).map((i) => i.currentUser?.uuid).find(Boolean);
+// One id per source: a Bitbucket uuid and a GitHub login.
+const isMe = (uuid) => !!uuid && Object.values(inboxes).some((i) => i.currentUser?.uuid === uuid);
 
 // The PR's participants are the source of truth for my approval, the inbox only lists the PRs.
 function syncState(repo, id, pr) {
-  const mine = pr.participants?.find((p) => p.user?.uuid === myUuid());
+  const mine = pr.participants?.find((p) => isMe(p.user?.uuid));
   const item = Object.values(inboxes).flatMap((i) => i.items ?? []).find((i) => i.repo === repo && i.id === id);
   const next = { approved: !!mine?.approved, participantState: mine?.state ?? null };
   if (!item || (!!item.attention?.approved === next.approved && (item.attention?.participantState ?? null) === next.participantState)) return;
@@ -196,7 +202,7 @@ async function refreshInbox() {
         const fresh = JSON.parse(await invoke('inbox', { workspace: ws }));
         // twg's inbox reports every PR as not approved, so keep the last known state until the PR itself is reloaded.
         const old = new Map((inboxes[ws]?.items ?? []).map((i) => [key(i.repo, i.id), i.attention]));
-        for (const i of fresh.items) if (old.has(key(i.repo, i.id))) i.attention = old.get(key(i.repo, i.id));
+        if (ws !== GH) for (const i of fresh.items) if (old.has(key(i.repo, i.id))) i.attention = old.get(key(i.repo, i.id));
         inboxes[ws] = fresh;
         delete errors[ws];
       } catch (e) {
@@ -206,9 +212,16 @@ async function refreshInbox() {
       renderSide();
     }),
   );
-  // Reload every PR for its real approval state, four at a time, before the slower guides.
-  const all = workspaces.flatMap((ws) => inboxes[ws]?.items ?? []);
+  // Reload every PR for its real approval state, four at a time, before the slower guides. GitHub's inbox already has it.
+  const all = workspaces.filter((ws) => ws !== GH).flatMap((ws) => inboxes[ws]?.items ?? []);
   for (let i = 0; i < all.length; i += 4) await Promise.all(all.slice(i, i + 4).map((p) => (key(p.repo, p.id) === current ? null : (prs.delete(key(p.repo, p.id)), loadPr(p.repo, p.id).catch(() => {})))));
+}
+
+function addSource(ws) {
+  workspaces.push(ws);
+  save('workspaces', workspaces);
+  renderSide();
+  refresh();
 }
 
 function renderSide() {
@@ -216,6 +229,7 @@ function renderSide() {
     h('header', {}, h('strong', { textContent: 'Reviews' }), refreshing && h('small', { className: 'refreshing', role: 'status', textContent: 'Refreshing…' }), h('span', {}, h('button', { textContent: '⚙', title: `Settings (${MOD}+,)`, onclick: () => openSettings(false) }), ' ', h('button', { className: refreshing ? 'busy' : '', disabled: refreshing, title: refreshing ? 'Refreshing…' : 'Refresh', onclick: refresh }, h('span', { textContent: '↻' })))),
     workspaces.map((ws) => {
       const items = inboxes[ws]?.items ?? [];
+      const gh = ws === GH;
       // Two clicks, like unapprove and delete: the first arms the button for a few seconds.
       const remove = (e) => {
         const b = e.target;
@@ -239,7 +253,7 @@ function renderSide() {
       return h(
         'section',
         {},
-        h('h2', {}, ws, h('button', { textContent: '×', title: 'Remove workspace', onclick: remove })),
+        h('h2', {}, h('span', { className: 'src' }, h('i', { className: `host ${gh ? 'gh' : 'bb'}`, textContent: gh ? 'GitHub' : 'Bitbucket' }), gh ? (inboxes[ws]?.currentUser?.uuid ?? '') : ws), h('button', { textContent: '×', title: gh ? 'Remove GitHub' : 'Remove workspace', onclick: remove })),
         errors[ws] && h('p', { className: 'error', textContent: errors[ws] }),
         [
           ['To review', items.filter((i) => !i.attention?.approved)],
@@ -248,7 +262,7 @@ function renderSide() {
           list.length > 0 && h('h3', { textContent: `${label} (${list.length})` }),
           // Repos in the order of their most recently updated PR.
           Object.entries(Object.groupBy(list.sort((a, b) => b.updatedOn.localeCompare(a.updatedOn)), (i) => i.repo)).map(([repo, prsOfRepo]) => [
-            h('h4', { textContent: repo.split('/')[1] }),
+            h('h4', { textContent: gh ? shortRepo(repo) : repo.split('/')[1] }),
             prsOfRepo.map((i) =>
               h(
                 'a',
@@ -270,14 +284,12 @@ function renderSide() {
           e.preventDefault();
           const ws = e.target.ws.value.trim();
           if (!/^[\w.-]+$/.test(ws) || workspaces.includes(ws)) return;
-          workspaces.push(ws);
-          save('workspaces', workspaces);
-          renderSide();
-          refresh();
+          addSource(ws);
         },
       },
-      h('input', { name: 'ws', placeholder: '+ Add workspace' }),
+      h('input', { name: 'ws', placeholder: '+ Add Bitbucket workspace' }),
     ),
+    !workspaces.includes(GH) && h('button', { className: 'connect', textContent: '+ Connect GitHub', title: 'Shows the pull requests that wait for your review on GitHub. Uses the gh CLI.', onclick: () => addSource(GH) }),
   );
 }
 
@@ -311,7 +323,7 @@ function reload(repo, id) {
 // The comment editor: a markdown text field with a toolbar, shortcuts and list editing. The text is shown formatted
 // in place: a styled copy lies exactly behind the field, whose own text is transparent. Markers stay, only dimmed.
 // quote: the code of the line being commented on, offered as "Quote line".
-function commentForm(send, onCancel, { value = '', label = 'Comment', lang = '', quote } = {}) {
+function commentForm(send, onCancel, { value = '', label = 'Comment', lang = '', quote, later: canLater = true } = {}) {
   const area = h('textarea', { placeholder: 'Write a comment. Markdown works.', value, rows: 3 });
   const mirror = h('pre', { className: 'mirror', ariaHidden: 'true' });
   const err = h('p', { className: 'error' });
@@ -365,7 +377,7 @@ function commentForm(send, onCancel, { value = '', label = 'Comment', lang = '',
     h('small', { textContent: 'Markdown' }),
   );
   // Two ways to send a new comment: post it now, or keep it pending as part of a review. Editing only saves.
-  const later = !value && h('button', { type: 'button', textContent: 'Add to review', title: 'Saved as pending: only you see it until you finish the review in Bitbucket', onclick: () => go(true) });
+  const later = !value && canLater && h('button', { type: 'button', textContent: 'Add to review', title: `Saved as pending: only you see it until you finish the review in ${host}`, onclick: () => go(true) });
   const form = h(
     'form',
     { className: 'comment' },
@@ -423,14 +435,14 @@ function threadEl(root, comments, post, lang) {
   const slot = h('div');
   const reply = h('button', {
     textContent: 'Reply',
-    onclick: () => set(slot, commentForm((text, pending) => post({ text, pending, replyTo: root.id }), () => set(slot, reply), { lang })),
+    onclick: () => set(slot, commentForm((text, pending) => post({ text, pending, replyTo: root.id }), () => set(slot, reply), { lang, later: !post.linesOnly })),
   });
   slot.append(reply);
   const item = (c) => {
     const text = c.content?.raw ?? '';
     const body = h('div', {}, rich(text));
     const edit = h('a', { textContent: 'Edit', onclick: () => set(body, commentForm((t) => post({ edit: c.id, text: t }), () => set(body, rich(text)), { value: text, label: 'Save', lang })) });
-    // Deleting cannot be undone on Bitbucket, so it takes a second click within 4 seconds.
+    // Deleting cannot be undone, so it takes a second click within 4 seconds.
     const del = h('a', { textContent: 'Delete' });
     del.onclick = () => {
       if (!del.dataset.armed) {
@@ -450,8 +462,8 @@ function threadEl(root, comments, post, lang) {
       del.textContent = 'Deleting…';
       post({ remove: c.id }).catch((e) => (del.textContent = String(e)));
     };
-    const mine = c.user?.uuid && c.user.uuid === myUuid();
-    return h('div', { className: 'comment' }, h('div', { className: 'chead' }, h('b', { textContent: c.user?.display_name ?? '?' }), h('small', { textContent: `${ago(c.created_on)}${c === root && root.resolution ? ' · resolved' : ''}` }), c.pending && h('span', { className: 'tag pending', textContent: 'Pending', title: 'Only you see this until you finish the review in Bitbucket' }), h('span', { className: 'grow' }), mine && [edit, del]), body);
+    const mine = isMe(c.user?.uuid) && !c.readonly;
+    return h('div', { className: 'comment' }, h('div', { className: 'chead' }, h('b', { textContent: c.user?.display_name ?? '?' }), h('small', { textContent: `${ago(c.created_on)}${c === root && root.resolution ? ' · resolved' : ''}` }), c.pending && h('span', { className: 'tag pending', textContent: 'Pending', title: `Only you see this until you finish the review in ${host}` }), h('span', { className: 'grow' }), mine && [edit, del]), body);
   };
   return h('div', { className: 'thread' + (root.resolution ? ' resolved' : '') }, all.map(item), slot);
 }
@@ -463,7 +475,7 @@ function infoEl(pr, files, reviewed, mine, openFile) {
   const people = (pr.participants ?? []).filter((p) => (p.role === 'REVIEWER' || p.state) && p.user?.uuid !== pr.author?.uuid).sort((a, b) => (order[a.state] ?? 2) - (order[b.state] ?? 2));
   const person = (p) => {
     const [mark, label, cls] = p.state === 'approved' ? ['✓', 'Approved', 'plus'] : p.state === 'changes_requested' ? ['●', 'Changes requested', 'warn'] : ['○', 'Not reviewed yet', 'muted'];
-    return h('div', { className: 'who', title: label }, h('span', { className: cls, textContent: mark }), h('span', { textContent: p.user?.uuid === myUuid() ? 'You' : (p.user?.display_name ?? '?') }), p.state === 'changes_requested' && h('small', { className: 'warn', textContent: 'changes requested' }));
+    return h('div', { className: 'who', title: label }, h('span', { className: cls, textContent: mark }), h('span', { textContent: isMe(p.user?.uuid) ? 'You' : (p.user?.display_name ?? '?') }), p.state === 'changes_requested' && h('small', { className: 'warn', textContent: 'changes requested' }));
   };
   const yours = !mine ? null : mine.state === 'approved' ? ['You approved', 'plus'] : mine.state === 'changes_requested' ? ['You requested changes', 'warn'] : ['Waiting for your review', ''];
   const sum = (k) => files.reduce((n, f) => n + f[k], 0);
@@ -723,6 +735,8 @@ const barWatch = new ResizeObserver(([entry]) => main.style.setProperty('--bar',
 function draw(repo, id, data, guide) {
   closeDef?.();
   const { pr, files } = data;
+  const gh = isGh(repo);
+  host = gh ? 'GitHub' : 'Bitbucket';
   guide ??= guideDone.get(key(repo, id)); // may have arrived since the caller looked (background preparation)
   tourNav = null;
   const aiKey = `${repo}-${id}-${pr.source.commit.hash}`; // same key the backend gets, so progress events match
@@ -732,7 +746,7 @@ function draw(repo, id, data, guide) {
   const comments = (pr._comments ?? []).filter((c) => !c.deleted);
   const general = comments.filter((c) => !c.parent && !c.inline);
   const pendingCount = comments.filter((c) => c.pending).length;
-  const mine = pr.participants?.find((p) => p.user?.uuid === myUuid());
+  const mine = pr.participants?.find((p) => isMe(p.user?.uuid));
   const changes = mine?.state === 'changes_requested';
   const redraw = () => {
     const y = main.scrollTop;
@@ -754,11 +768,13 @@ function draw(repo, id, data, guide) {
   };
   // One write path for comments: new or reply ({ text, ... }), edit ({ edit: commentId, text }), delete ({ remove: commentId }).
   const post = async (args) => {
-    if (args.remove) await invoke('comment_delete', { repo, id, comment: args.remove });
-    else if (args.edit) await invoke('comment_update', { repo, id, comment: args.edit, text: args.text });
-    else await invoke('comment', { repo, id, ...args });
+    // Comment ids are numbers on Bitbucket and tagged text on GitHub: the backend takes text.
+    if (args.remove) await invoke('comment_delete', { repo, id, comment: String(args.remove) });
+    else if (args.edit) await invoke('comment_update', { repo, id, comment: String(args.edit), text: args.text });
+    else await invoke('comment', { repo, id, ...args, replyTo: args.replyTo == null ? undefined : String(args.replyTo) });
     await reload(repo, id);
   };
+  post.linesOnly = gh; // GitHub keeps only comments on a line pending
   const act = (action) => async (e) => {
     // Taking back an approval needs a second click within 4 seconds, so a stray click cannot do it.
     if (action === 'unapprove' && !e.target.dataset.armed) {
@@ -775,6 +791,8 @@ function draw(repo, id, data, guide) {
       }, 4000);
       return;
     }
+    // GitHub wants the reason in words, unless pending comments already say it.
+    if (gh && action === 'request-changes' && !pendingCount) return askReason();
     e.target.disabled = true;
     try {
       await invoke('review', { repo, id, action });
@@ -783,6 +801,18 @@ function draw(repo, id, data, guide) {
       e.target.disabled = false;
       alert(ex);
     }
+  };
+  const askReason = () => {
+    const close = () => (dlg.close(), dlg.remove());
+    const send = async (text) => {
+      await invoke('review', { repo, id, action: 'request-changes', text });
+      close();
+      await reload(repo, id);
+    };
+    const dlg = h('dialog', { className: 'settings' }, h('h2', { textContent: 'Request changes' }), h('p', { className: 'muted', textContent: 'Say what has to change. GitHub posts this with your review.' }), commentForm(send, close, { label: 'Request changes', later: false }));
+    dlg.addEventListener('cancel', () => dlg.remove());
+    document.body.append(dlg);
+    dlg.showModal();
   };
   const fileLines = (path) => {
     const src = pr.source.repository?.full_name ?? repo; // forks keep the source commit in their own repo
@@ -884,7 +914,7 @@ function draw(repo, id, data, guide) {
               h('p', { className: 'lead', textContent: done.size >= t.stops.length ? `You have been through all ${t.stops.length} stops.` : `You have been through ${done.size} of ${t.stops.length} stops. Skipped stops are marked in the bar above.` }),
               t.questions.length > 0 && [h('h3', { textContent: 'Worth raising with the author' }), h('ul', {}, t.questions.map((q) => h('li', {}, rich(q))))],
               h('h3', { textContent: 'Leave a general comment' }),
-              commentForm((text, pending) => post({ text, pending })),
+              commentForm((text, pending) => post({ text, pending }), null, { later: !post.linesOnly }),
               h('div', { className: 'verdict' }, h('button', { className: changes ? 'ask on' : 'ask', textContent: changes ? '● Changes requested' : 'Request changes', onclick: act(changes ? 'remove-request-changes' : 'request-changes') }), h('button', { className: mine?.approved ? 'on' : 'primary', textContent: mine?.approved ? '✓ Approved' : 'Approve', onclick: act(mine?.approved ? 'unapprove' : 'approve') })),
             ]
           : [
@@ -916,7 +946,7 @@ function draw(repo, id, data, guide) {
     );
   };
   // Issue keys like TVP-27172 in the title link to the Jira site named after the Bitbucket workspace.
-  const title = pr.title.split(/\b([A-Z][A-Z0-9]+-\d+)\b/).map((part, n) => (n % 2 ? h('a', { textContent: part, title: 'Open in Jira', onclick: () => invoke('open_url', { url: `https://${repo.split('/')[0]}.atlassian.net/browse/${part}` }) }) : part));
+  const title = gh ? pr.title : pr.title.split(/\b([A-Z][A-Z0-9]+-\d+)\b/).map((part, n) => (n % 2 ? h('a', { textContent: part, title: 'Open in Jira', onclick: () => invoke('open_url', { url: `https://${repo.split('/')[0]}.atlassian.net/browse/${part}` }) }) : part));
   const views = {
     overview: () =>
       h(
@@ -927,7 +957,7 @@ function draw(repo, id, data, guide) {
           {},
           guide && rich(g.summary, 'lead text'),
           pr.description && h('div', { className: 'box' }, h('h3', { textContent: 'Description' }), rich(pr.description)),
-          h('div', { className: 'box' }, h('h3', { textContent: `Discussion (${general.length})` }), general.map((c) => threadEl(c, comments, post)), commentForm((text, pending) => post({ text, pending }))),
+          h('div', { className: 'box' }, h('h3', { textContent: `Discussion (${general.length})` }), general.map((c) => threadEl(c, comments, post)), commentForm((text, pending) => post({ text, pending }), null, { later: !post.linesOnly })),
         ),
         infoEl(pr, files, reviewed, mine, (path) => {
           tab = 'diff';
@@ -962,8 +992,8 @@ function draw(repo, id, data, guide) {
       h(
         'div',
         { className: 'acts' },
-        pendingCount > 0 && h('button', { className: 'on warn', textContent: `${pendingCount} pending · finish in Bitbucket`, title: 'Pending comments are published when you finish the review in Bitbucket', onclick: () => invoke('open_url', { url: pr.links.html.href }) }),
-        h('button', { textContent: 'Open in Bitbucket', onclick: () => invoke('open_url', { url: pr.links.html.href }) }),
+        pendingCount > 0 && h('button', { className: 'on warn', textContent: `${pendingCount} pending · finish in ${host}`, title: gh ? 'Pending comments are published when you approve or request changes here, or finish the review on GitHub' : 'Pending comments are published when you finish the review in Bitbucket', onclick: () => invoke('open_url', { url: pr.links.html.href }) }),
+        h('button', { textContent: `Open in ${host}`, onclick: () => invoke('open_url', { url: pr.links.html.href }) }),
         h('button', { className: changes ? 'ask on' : 'ask', textContent: changes ? '● Changes requested' : 'Request changes', onclick: act(changes ? 'remove-request-changes' : 'request-changes') }),
         h('button', { className: mine?.approved ? 'on' : 'primary', textContent: mine?.approved ? '✓ Approved' : 'Approve', onclick: act(mine?.approved ? 'unapprove' : 'approve') }),
       ),
@@ -978,7 +1008,7 @@ function draw(repo, id, data, guide) {
       h('code', { className: 'branch', title: 'Source branch', textContent: pr.source.branch.name }),
       h('span', { className: 'arrow', textContent: '→' }),
       h('code', { className: 'branch', title: 'Target branch', textContent: pr.destination.branch.name }),
-      h('span', { className: 'where', textContent: `${repo} #${id}` }),
+      h('span', { className: 'where', textContent: `${shortRepo(repo)} #${id}` }),
     ),
     views[tab](),
   );
@@ -1097,6 +1127,7 @@ async function openSettings(first) {
   };
   const status = h('small');
   const wsInput = h('input', { placeholder: 'e.g. my-company', value: workspaces[0] ?? '' });
+  let useGh = !!found.gh && !found.twg;
   const problem = h('p', { className: 'error' });
   const dlg = h('dialog', { className: 'settings' });
   const test = async () => {
@@ -1113,8 +1144,10 @@ async function openSettings(first) {
   };
   const done = () => {
     const ws = wsInput.value.trim();
-    if (first && !/^[\w.-]+$/.test(ws)) return (problem.textContent = 'Enter your Bitbucket workspace, the first part of the URL after bitbucket.org/.');
-    if (first && !workspaces.includes(ws)) workspaces = [ws, ...workspaces];
+    if (first && ws && !/^[\w.-]+$/.test(ws)) return (problem.textContent = 'The Bitbucket workspace is the first part of the URL after bitbucket.org/.');
+    if (first && !ws && !useGh && !workspaces.length) return (problem.textContent = 'Enter a Bitbucket workspace or tick GitHub.');
+    if (first && ws && !workspaces.includes(ws)) workspaces = [ws, ...workspaces];
+    if (first && useGh && !workspaces.includes(GH)) workspaces = [...workspaces, GH];
     // Results belong to the agent and model that wrote them.
     if (pick !== agent || ['guide', 'tour'].some((kind) => modelFor(kind, pick, chosen) !== modelFor(kind, pick))) for (const m of [guides, guideDone, tours, tourDone, streamed]) m.clear();
     agent = pick;
@@ -1135,7 +1168,7 @@ async function openSettings(first) {
     set(
       dlg,
       h('h2', { textContent: first ? 'Welcome to Better Review' : 'Settings' }),
-      first && h('p', { className: 'muted', textContent: 'Two choices and you are ready to review.' }),
+      first && h('p', { className: 'muted', textContent: 'Pick an AI agent and where your pull requests are.' }),
       h('h3', { textContent: 'AI agent' }),
       h('p', { className: 'muted', textContent: 'Writes the review guide and the tour. It runs through a CLI on this Mac, with your own account.' }),
       AGENTS.map((x) =>
@@ -1162,7 +1195,14 @@ async function openSettings(first) {
       h('small', { textContent: 'One AI request per open pull request. If off, a guide is written when you open the pull request.' }),
       h('h3', { textContent: 'Appearance' }),
       h('div', { className: 'models' }, h('label', {}, 'Theme', h('select', { onchange: (e) => (theme = e.target.value) }, [['system', 'Same as system'], ['light', 'Light'], ['dark', 'Dark']].map(([value, textContent]) => h('option', { value, textContent, selected: value === theme }))))),
-      first && [h('h3', { textContent: 'Bitbucket workspace' }), wsInput, found.twg === false && h('p', { className: 'error', textContent: 'The twg CLI was not found. Better Review needs it to read Bitbucket.' })],
+      first && [
+        h('h3', { textContent: 'Your pull requests' }),
+        h('p', { className: 'muted', textContent: 'Bitbucket, GitHub or both. You can add more in the sidebar later.' }),
+        h('label', { className: 'field' }, 'Bitbucket workspace', wsInput),
+        found.twg === false && h('small', { className: 'minus', textContent: 'The twg CLI was not found. Better Review needs it to read Bitbucket.' }),
+        h('label', { className: 'check' }, h('input', { type: 'checkbox', checked: useGh, onchange: (e) => (useGh = e.target.checked) }), 'GitHub: pull requests that wait for my review'),
+        found.gh === false && h('small', { className: 'minus', textContent: 'The gh CLI was not found. Install it and run "gh auth login".' }),
+      ],
       problem,
       h('div', { className: 'row end' }, !first && h('button', { type: 'button', textContent: 'Cancel', onclick: () => (dlg.close(), dlg.remove()) }), h('button', { type: 'button', className: 'primary', textContent: first ? 'Start reviewing' : 'Save', onclick: done })),
     );
