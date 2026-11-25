@@ -98,6 +98,8 @@ function applyTheme(theme = load('theme', 'system')) {
 applyTheme();
 // Preloading costs one AI request per open PR, so it is opt-in.
 const preloadOn = () => load('preload', false);
+// Optional: leave Dependabot's pull requests out of the sidebar.
+const shown = (ws) => (inboxes[ws]?.items ?? []).filter((i) => !load('hideDependabot', false) || !/dependabot/i.test(i.author?.displayName ?? ''));
 const errors = {};
 let current = null;
 const prs = new Map(); // key -> Promise<{pr, files}>
@@ -192,7 +194,7 @@ async function refresh() {
   }
   // ponytail: guides preload one at a time, raise to 2-3 in parallel if the queue gets long.
   if (!preloadOn()) return;
-  for (const ws of workspaces) for (const i of inboxes[ws]?.items ?? []) await loadGuide(i.repo, i.id).catch(() => {});
+  for (const ws of workspaces) for (const i of shown(ws)) await loadGuide(i.repo, i.id).catch(() => {});
 }
 
 async function refreshInbox() {
@@ -228,7 +230,7 @@ function renderSide() {
   set(side, 
     h('header', {}, h('strong', { textContent: 'Reviews' }), refreshing && h('small', { className: 'refreshing', role: 'status', textContent: 'Refreshing…' }), h('span', {}, h('button', { textContent: '⚙', title: `Settings (${MOD}+,)`, onclick: () => openSettings(false) }), ' ', h('button', { className: refreshing ? 'busy' : '', disabled: refreshing, title: refreshing ? 'Refreshing…' : 'Refresh', onclick: refresh }, h('span', { textContent: '↻' })))),
     workspaces.map((ws) => {
-      const items = inboxes[ws]?.items ?? [];
+      const items = shown(ws);
       const gh = ws === GH;
       // A folded source shows only its badge and how many pull requests wait for review.
       const closed = load('folded', []).includes(ws);
@@ -1121,6 +1123,7 @@ async function openSettings(first) {
   const found = await invoke('installed').catch(() => ({}));
   let pick = agent ?? (found.copilot && !found.claude ? 'copilot' : 'claude');
   let pre = preloadOn();
+  let hideBot = load('hideDependabot', false);
   let theme = load('theme', 'system');
   const chosen = structuredClone(models);
   const offered = Object.fromEntries(AGENTS.map((x) => [x.id, x.models]));
@@ -1161,6 +1164,7 @@ async function openSettings(first) {
     save('agent', agent);
     save('models', models);
     save('preload', pre);
+    save('hideDependabot', hideBot);
     save('theme', theme);
     applyTheme(theme);
     save('workspaces', workspaces);
@@ -1199,6 +1203,8 @@ async function openSettings(first) {
       h('div', { className: 'row' }, h('button', { type: 'button', textContent: 'Test this agent', onclick: test }), status),
       h('label', { className: 'check' }, h('input', { type: 'checkbox', checked: pre, onchange: (e) => (pre = e.target.checked) }), 'Prepare guides for all pull requests in the background'),
       h('small', { textContent: 'One AI request per open pull request. If off, a guide is written when you open the pull request.' }),
+      h('h3', { textContent: 'Sidebar' }),
+      h('label', { className: 'check' }, h('input', { type: 'checkbox', checked: hideBot, onchange: (e) => (hideBot = e.target.checked) }), 'Hide pull requests from Dependabot'),
       h('h3', { textContent: 'Appearance' }),
       h('div', { className: 'models' }, h('label', {}, 'Theme', h('select', { onchange: (e) => (theme = e.target.value) }, [['system', 'Same as system'], ['light', 'Light'], ['dark', 'Dark']].map(([value, textContent]) => h('option', { value, textContent, selected: value === theme }))))),
       first && [
