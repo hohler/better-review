@@ -230,6 +230,12 @@ function renderSide() {
     workspaces.map((ws) => {
       const items = inboxes[ws]?.items ?? [];
       const gh = ws === GH;
+      // A folded source shows only its badge and how many pull requests wait for review.
+      const closed = load('folded', []).includes(ws);
+      // Approved pull requests are done, so their list starts folded.
+      const approvedOpen = load('approvedOpen', []).includes(ws);
+      const foldApproved = () => (save('approvedOpen', approvedOpen ? load('approvedOpen', []).filter((w) => w !== ws) : [...load('approvedOpen', []), ws]), renderSide());
+      const fold = () => (save('folded', closed ? load('folded', []).filter((w) => w !== ws) : [...load('folded', []), ws]), renderSide());
       // Two clicks, like unapprove and delete: the first arms the button for a few seconds.
       const remove = (e) => {
         const b = e.target;
@@ -253,15 +259,15 @@ function renderSide() {
       return h(
         'section',
         {},
-        h('h2', {}, h('span', { className: 'src' }, h('i', { className: `host ${gh ? 'gh' : 'bb'}`, textContent: gh ? 'GitHub' : 'Bitbucket' }), gh ? (inboxes[ws]?.currentUser?.uuid ?? '') : ws), h('button', { textContent: '×', title: gh ? 'Remove GitHub' : 'Remove workspace', onclick: remove })),
+        h('h2', {}, h('button', { className: 'src', ariaExpanded: String(!closed), title: closed ? 'Show' : 'Hide', onclick: fold }, h('span', { className: 'chev', textContent: '›' }), h('i', { className: `host ${gh ? 'gh' : 'bb'}`, textContent: gh ? 'GitHub' : 'Bitbucket' }), h('span', { className: 'name', textContent: gh ? (inboxes[ws]?.currentUser?.uuid ?? '') : ws }), closed && h('span', { className: 'n', textContent: items.filter((i) => !i.attention?.approved).length })), h('button', { textContent: '×', title: gh ? 'Remove GitHub' : 'Remove workspace', onclick: remove })),
         errors[ws] && h('p', { className: 'error', textContent: errors[ws] }),
-        [
+        !closed && [
           ['To review', items.filter((i) => !i.attention?.approved)],
-          ['Approved', items.filter((i) => i.attention?.approved)],
-        ].map(([label, list]) => [
-          list.length > 0 && h('h3', { textContent: `${label} (${list.length})` }),
+          ['Approved', items.filter((i) => i.attention?.approved), approvedOpen, foldApproved],
+        ].map(([label, list, open = true, toggle]) => [
+          list.length > 0 && (toggle ? h('h3', {}, h('button', { className: 'src', ariaExpanded: String(open), title: open ? 'Hide' : 'Show', onclick: toggle }, h('span', { className: 'chev', textContent: '›' }), `${label} (${list.length})`)) : h('h3', { textContent: `${label} (${list.length})` })),
           // Repos in the order of their most recently updated PR.
-          Object.entries(Object.groupBy(list.sort((a, b) => b.updatedOn.localeCompare(a.updatedOn)), (i) => i.repo)).map(([repo, prsOfRepo]) => [
+          open && Object.entries(Object.groupBy(list.sort((a, b) => b.updatedOn.localeCompare(a.updatedOn)), (i) => i.repo)).map(([repo, prsOfRepo]) => [
             h('h4', { textContent: gh ? shortRepo(repo) : repo.split('/')[1] }),
             prsOfRepo.map((i) =>
               h(
@@ -274,7 +280,7 @@ function renderSide() {
             ),
           ]),
         ]),
-        !items.length && !errors[ws] && h('p', { className: 'muted', textContent: inboxes[ws] ? 'No open reviews' : 'Loading…' }),
+        !closed && !items.length && !errors[ws] && h('p', { className: 'muted', textContent: inboxes[ws] ? 'No open reviews' : 'Loading…' }),
       );
     }),
     h(
