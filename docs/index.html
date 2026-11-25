@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Better Review: guided pull request reviews for Bitbucket</title>
-<meta name="description" content="A desktop app for macOS and Windows that groups the files of a Bitbucket pull request, explains what changed and walks you through it step by step.">
+<title>Better Review: guided pull request reviews for Bitbucket and GitHub</title>
+<meta name="description" content="A desktop app for macOS and Windows that groups the files of a Bitbucket or GitHub pull request, explains what changed and walks you through it step by step.">
 <meta property="og:title" content="Better Review">
-<meta property="og:description" content="Guided pull request reviews for Bitbucket. Read a guide, follow a tour, approve.">
+<meta property="og:description" content="Guided pull request reviews for Bitbucket and GitHub. Read a guide, follow a tour, approve.">
 <meta property="og:image" content="https://betterreview.app/screenshots/hero.png">
 <style>
   /* No web fonts and no third-party requests. The one inline script is the light/dark switch. */
@@ -76,6 +76,7 @@
   .stop { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 8fr); gap: 1.5rem clamp(1.5rem, 4vw, 4rem); align-items: start; padding-block: clamp(2.5rem, 6vw, 5rem); border-bottom: 1px solid var(--rule); }
   .stop:last-child { border-bottom: 0; }
   .stops.follow { padding-top: 0; border-top: 1px solid var(--rule); }
+  .shot.narrow { max-width: 18.125rem; justify-self: center; }
   /* Same route as in the app: teal behind you, amber where you are. */
   .bar { display: flex; align-items: center; gap: 6px; margin: 0 0 1.25rem; font-size: 0.875rem; color: var(--soft); }
   .bar i { width: 2.25rem; height: 5px; border-radius: 3px; background: var(--rule); }
@@ -123,7 +124,7 @@
 
   <main>
     <h1 class="diff">
-      <span class="hunk">@@ reviewing a Bitbucket pull request @@</span>
+      <span class="hunk">@@ reviewing a pull request on Bitbucket or GitHub @@</span>
       <del>Open forty files and work out what this is about</del>
       <del>Read the diff top to bottom, in alphabetical order</del>
       <ins>Read a guide that groups the files and says what changed</ins>
@@ -132,7 +133,7 @@
     </h1>
 
     <div class="lede">
-      <p>Better Review is a desktop app for the pull requests waiting for your review on Bitbucket Cloud. It explains each one before you read a line of code, using the AI agent you already have: Claude Code or GitHub Copilot.</p>
+      <p>Better Review is a desktop app for the pull requests waiting for your review on Bitbucket Cloud and GitHub. It explains each one before you read a line of code, using the AI agent you already have: Claude Code or GitHub Copilot.</p>
       <div class="actions">
         <a class="button" href="https://github.com/hohler/better-review/releases/latest">Download for macOS</a>
         <a class="button quiet" href="https://github.com/hohler/better-review/releases/latest">Download for Windows</a>
@@ -195,7 +196,7 @@
           <p class="bar"><i class="done"></i><i class="done"></i><i class="done"></i><i class="now"></i><span>Stop 4 of 4</span></p>
           <h3>Approve, or ask for changes</h3>
           <p>Approve and request changes sit at the top of every pull request. The overview shows who else is reviewing and where they stand, whether the builds passed, and how many files you have covered.</p>
-          <p>The sidebar keeps the pull requests still waiting for you apart from the ones you approved, and marks where you asked for changes.</p>
+          <p>The sidebar lists the pull requests still waiting for you and marks where you asked for changes. The ones you approved fold away.</p>
           <p class="check">You choose the agent and the model for the guide and for the tour. Nothing is generated until you open a pull request, so no AI credits are spent by accident.</p>
         </div>
         <picture class="shot">
@@ -206,6 +207,18 @@
     </section>
 
     <section class="stops follow">
+      <article class="stop">
+        <div>
+          <h3>Bitbucket and GitHub in one place</h3>
+          <p>Each Bitbucket workspace and your GitHub account get their own block in the sidebar, marked with a badge in the colour of the host. For GitHub you see every open pull request that waits for your review, across all organisations.</p>
+          <p>A pull request opens the same way from both: overview, guide, tour and diff. Comments, approvals and change requests go back to the host it came from.</p>
+          <p>Fold away a block you do not need right now. It then shows only how many pull requests are waiting.</p>
+        </div>
+        <picture class="shot narrow">
+          <source srcset="screenshots/web-sources-dark.png" media="(prefers-color-scheme: dark)">
+          <img src="screenshots/web-sources-light.png" width="580" height="1180" loading="lazy" alt="The sidebar with two blocks: a Bitbucket workspace with three pull requests to review, and GitHub with two.">
+        </picture>
+      </article>
       <article class="stop">
         <div>
           <h3>Follow a name to its definition</h3>
@@ -223,7 +236,7 @@
       <h2>What it runs on</h2>
       <div>
         <h3>Your own accounts</h3>
-        <p>The app has no server and no login of its own. It reads Bitbucket through the <code>twg</code> command line tool and writes guides through <code>claude</code> or <code>copilot</code>, each signed in as you.</p>
+        <p>The app has no server and no login of its own. It reads Bitbucket through the <code>twg</code> command line tool, GitHub through <code>gh</code>, and writes guides through <code>claude</code> or <code>copilot</code>, each signed in as you.</p>
       </div>
       <div>
         <h3>An agent with no tools</h3>
@@ -238,9 +251,9 @@
     <section class="install" id="install">
       <h2>Install</h2>
       <ol>
-        <li>Install <code>twg</code> and sign in to your Bitbucket workspace.</li>
+        <li>For Bitbucket install <code>twg</code>, for GitHub install <code>gh</code>, or both. Sign in.</li>
         <li>Install Claude Code or the GitHub Copilot CLI and sign in.</li>
-        <li>Download Better Review and open it. A short setup asks for your agent and your workspace.</li>
+        <li>Download Better Review and open it. A short setup asks for your agent and where your pull requests are.</li>
       </ol>
       <div class="actions">
         <a class="button" href="https://github.com/hohler/better-review/releases/latest">Open the release page</a>

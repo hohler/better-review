@@ -14,8 +14,8 @@ const q = new URLSearchParams(location.hash.slice(1));
 localStorage.clear();
 if (q.get('theme')) localStorage.setItem('theme', JSON.stringify(q.get('theme')));
 localStorage.setItem('agent', '"claude"');
-// &gh=1 adds GitHub as a second source.
-localStorage.setItem('workspaces', q.get('gh') ? '["acme","github.com"]' : '["acme"]');
+// Two sources, as in a real setup: one Bitbucket workspace and GitHub.
+localStorage.setItem('workspaces', '["acme","github.com"]');
 
 const fx = async (name) => {
   const text = await (await fetch(`fx/${name}`)).text();

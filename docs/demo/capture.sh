@@ -21,5 +21,10 @@ for theme in light dark; do
   "$chrome" --headless=new --disable-gpu --hide-scrollbars --user-data-dir="$(mktemp -d)" --window-size=1280,820 --force-device-scale-factor=2 --virtual-time-budget=8000 --screenshot="$out/web-popover-$theme.png" "http://127.0.0.1:4718/docs/demo/#shot=tour&stop=3&sym=applyGiftCard&theme=$theme" >/dev/null 2>&1
   echo "web-popover-$theme.png"
 done
+# The sidebar alone, with both sources: the top left of the overview shot. An offset of 0 would crop from the centre.
+for theme in light dark; do
+  sips -c 1180 580 --cropOffset 1 1 "$out/web-overview-$theme.png" --out "$out/web-sources-$theme.png" >/dev/null
+  echo "web-sources-$theme.png"
+done
 "$chrome" --headless=new --disable-gpu --hide-scrollbars --user-data-dir="$(mktemp -d)" --window-size=1600,1000 --force-device-scale-factor=2 --virtual-time-budget=3000 --screenshot="$out/hero.png" "http://127.0.0.1:4718/docs/demo/hero.html" >/dev/null 2>&1
 echo hero.png
