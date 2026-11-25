@@ -551,7 +551,7 @@ const icon = (name) => {
 };
 
 // hidden: null (show diff) or the reason shown in the placeholder, e.g. "Test files".
-// only: optional Set of hunks, to show just a part of the file (tour stops).
+// only: optional Set of hunk headers, to show just a part of the file (tour stops). Headers, not objects: a reload parses the diff again.
 // Turns each use of a symbol defined in this PR into a link to its definition. Comments and strings are left alone.
 function linkSymbols(cell, path, line, index) {
   const texts = [];
@@ -692,7 +692,7 @@ function fileEl(f, hidden, ctx, only) {
     let end = 0; // last new-side line of the previous hunk
     let skipped = false; // a hunk outside this tour stop lies in the gap before the next shown hunk
     for (const hunk of f.hunks) {
-      if (only && !only.has(hunk)) {
+      if (only && !only.has(hunk.header)) {
         skipped = true;
         continue;
       }
@@ -921,7 +921,7 @@ function draw(repo, id, data, guide) {
               h('h2', { textContent: s.title }),
               rich(s.explanation, 'lead text'),
               s.check && h('div', { className: 'checkbox' }, h('b', { textContent: 'Check ' }), rich(s.check)),
-              h('div', { className: 'cards' }, s.parts.map((p) => fileEl(byPath[p.path], null, tctx, new Set(p.hunks))), s.files.map((p) => fileEl(byPath[p], why(p), tctx))),
+              h('div', { className: 'cards' }, s.parts.map((p) => fileEl(byPath[p.path], null, tctx, new Set(p.hunks.map((x) => x.header)))), s.files.map((p) => fileEl(byPath[p], why(p), tctx))),
             ];
     return h(
       'div',
