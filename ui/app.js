@@ -644,9 +644,7 @@ function fileEl(f, hidden, ctx, only) {
   const { comments, post, reviewed, toggle } = ctx;
   const roots = comments.filter((c) => !c.parent && c.inline?.path === f.path);
   const [name, dir] = split(f.path);
-  // In the tour a reviewed file stays open: the stop is about reading it.
-  const marked = reviewed.has(f.path);
-  const done = !ctx.tour && marked;
+  const done = reviewed.has(f.path);
   const body = h('div', { className: 'body' });
   const card = h(
     'div',
@@ -668,7 +666,7 @@ function fileEl(f, hidden, ctx, only) {
       h('span', { className: 'stats' }, stats(f)),
       // Marking a file whose top is already scrolled out of view collapses it, so jump to the next file.
       only && only.size < f.hunks.length && h('span', { className: 'tag', textContent: `${only.size} of ${f.hunks.length} hunks` }),
-      check(marked, () => toggle([f.path], !marked, !ctx.tour && !marked && card.getBoundingClientRect().top < main.getBoundingClientRect().top + 56 && card.id)),
+      check(done, () => toggle([f.path], !done, !done && card.getBoundingClientRect().top < main.getBoundingClientRect().top + 56 && card.id)),
     ),
     body,
   );
