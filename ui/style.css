@@ -96,6 +96,7 @@ h1 { font-size: 23px; font-weight: 700; margin: 0 0 6px; letter-spacing: -.01em;
 .file .body > p { margin: 4px 16px 12px; }
 .placeholder { text-align: center; padding: 22px 0 26px; }
 .placeholder p { margin: 0 0 8px; }
+.placeholder.lazy { padding: 0; }
 .placeholder button { border: 0; background: none; font-weight: 500; }
 .scroll { overflow-x: auto; padding-bottom: 6px; }
 table.diff { border-collapse: collapse; min-width: 100%; font-family: var(--mono); font-size: 12px; line-height: 20px; }

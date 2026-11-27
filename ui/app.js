@@ -733,10 +733,31 @@ function fileEl(f, hidden, ctx, only) {
   };
   card.show = show;
   if (done) body.hidden = true;
-  else if (hidden) set(body, h('div', { className: 'placeholder' }, h('p', { textContent: `${hidden} are not shown by default` }), h('button', { textContent: 'Show diff', onclick: show })));
-  else show();
+  else if (hidden && !opened.has(card.id)) set(body, h('div', { className: 'placeholder' }, h('p', { textContent: `${hidden} are not shown by default` }), h('button', { textContent: 'Show diff', onclick: () => (opened.add(card.id), show()) })));
+  else {
+    // Keeps the height the card had before a redraw (else an estimate), so the scroll position holds until it is built.
+    const was = document.getElementById(card.id)?.querySelector(':scope > .body')?.offsetHeight;
+    const rows = f.hunks.reduce((n, x) => n + (only && !only.has(x.header) ? 0 : x.lines.length + 1.5), 1.5); // 1.5 rows per gap line
+    set(body, h('div', { className: 'placeholder lazy', style: `min-height:${was || rows * 20}px` }));
+    // After the draw has put the card on the page and before the next paint.
+    if (!nearQueued) (nearQueued = true), queueMicrotask(buildNear);
+  }
   return card;
 }
+// A diff is built when its card comes near the viewport: a redraw would otherwise rebuild every row of every file.
+let nearQueued = false;
+const buildNear = () => {
+  nearQueued = false;
+  const { top, bottom } = main.getBoundingClientRect();
+  for (const el of main.querySelectorAll('.lazy')) {
+    const r = el.getBoundingClientRect();
+    if (r.top < bottom + 800 && r.bottom > top - 800) el.closest('.file').show();
+  }
+};
+main.addEventListener('scroll', buildNear, { passive: true });
+const showAll = () => main.querySelectorAll('.lazy').forEach((el) => el.closest('.file').show());
+// Large diffs the user chose to show stay shown across redraws.
+const opened = new Set();
 
 const barWatch = new ResizeObserver(([entry]) => main.style.setProperty('--bar', `${Math.round(entry.borderBoxSize[0].blockSize)}px`));
 
@@ -895,6 +916,7 @@ function draw(repo, id, data, guide) {
     // In the tour a symbol link does not jump away: a definition outside the current stop opens in a popover.
     const stopOf = ({ path, line }) => t.stops.findIndex((x) => x.files.includes(path) || x.parts.some((p) => p.path === path && p.hunks.some((hk) => hk.lines.some((l) => l.n === line)))) + 1;
     const openDef = (target, anchor) => {
+      document.getElementById(`f-${target.path}`)?.querySelector('.lazy') && document.getElementById(`f-${target.path}`).show();
       if (document.getElementById(`f-${target.path}`)?.querySelector(`tr[data-n="${target.line}"]`)) return closeDef?.(), goToLine(target);
       const snippet = defSnippet(byPath[target.path], target.line);
       if (!snippet) return;
@@ -929,7 +951,7 @@ function draw(repo, id, data, guide) {
               h('h2', { textContent: s.title }),
               rich(s.explanation, 'lead text'),
               s.check && h('div', { className: 'checkbox' }, h('b', { textContent: 'Check ' }), rich(s.check)),
-              h('div', { className: 'cards' }, s.parts.map((p) => fileEl(byPath[p.path], null, tctx, new Set(p.hunks.map((x) => x.header)))), s.files.map((p) => fileEl(byPath[p], why(p), tctx))),
+              h('div', { className: 'cards' }, s.parts.map((p) => fileEl(byPath[p.path], p.hunks.reduce((n, x) => n + x.lines.length, 0) > 1500 ? 'Large diffs' : null, tctx, new Set(p.hunks.map((x) => x.header)))), s.files.map((p) => fileEl(byPath[p], why(p), tctx))),
             ];
     return h(
       'div',
@@ -1051,6 +1073,7 @@ function findRun(query, step = 0) {
   if (step === 0 || stale) {
     find.ranges = [];
     if (step === 0) find.i = 0;
+    if (query) showAll(); // text of files not built yet would be missed
     // Syntax highlighting splits a line into many text nodes, so search one joined string and map hits back to nodes.
     // A line break is inserted between blocks, so a match never runs from one line into the next.
     const q = query.toLowerCase();
